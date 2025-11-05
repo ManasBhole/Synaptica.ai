@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: synaptica_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Run tests
+      run: go test ./... -v
+
+    - name: Build
+      run: |
+        mkdir -p bin
+        go build -o bin/api-gateway ./cmd/api-gateway
+        go build -o bin/ingestion-service ./cmd/ingestion-service
+        go build -o bin/dlp-service ./cmd/dlp-service
+        go build -o bin/deid-service ./cmd/deid-service
+        go build -o bin/normalizer-service ./cmd/normalizer-service
+        go build -o bin/linkage-service ./cmd/linkage-service
+        go build -o bin/llm-service ./cmd/llm-service
+        go build -o bin/cohort-service ./cmd/cohort-service
+        go build -o bin/training-service ./cmd/training-service
+        go build -o bin/serving-service ./cmd/serving-service
+        go build -o bin/cleanroom-service ./cmd/cleanroom-service
+
