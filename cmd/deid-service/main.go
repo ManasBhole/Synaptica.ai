@@ -134,14 +134,8 @@ func (s *DeIDService) handleDeID(w http.ResponseWriter, r *http.Request) {
 
 	// This would parse JSON body properly
 	// For now, placeholder
-	tokenizedData, tokenVault := s.deidentify(req.Data, map[string]interface{}{})
+    tokenizedData, _ := s.deidentify(req.Data, map[string]interface{}{})
 	anonymityLevel := s.checkAnonymityLevel(tokenizedData)
-
-	resp := models.DeIDResponse{
-		TokenizedData: tokenizedData,
-		TokenVault:    tokenVault,
-		AnonymityLevel: anonymityLevel,
-	}
 
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"tokenized_data":%v,"anonymity_level":"%s"}`, tokenizedData, anonymityLevel)

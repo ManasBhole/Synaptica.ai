@@ -1,13 +1,12 @@
 package storage
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
+    "context"
+    "encoding/json"
 
-	"github.com/synaptica-ai/platform/pkg/common/database"
-	"github.com/synaptica-ai/platform/pkg/common/logger"
-	"github.com/synaptica-ai/platform/pkg/common/models"
+    "github.com/synaptica-ai/platform/pkg/common/database"
+    "github.com/synaptica-ai/platform/pkg/common/logger"
+    "github.com/synaptica-ai/platform/pkg/common/models"
 )
 
 type LakehouseStorage struct {

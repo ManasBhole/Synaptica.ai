@@ -1,14 +1,13 @@
 package kafka
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
+    "context"
+    "encoding/json"
 
-	"github.com/segmentio/kafka-go"
-	"github.com/synaptica-ai/platform/pkg/common/config"
-	"github.com/synaptica-ai/platform/pkg/common/logger"
-	"github.com/synaptica-ai/platform/pkg/common/models"
+    "github.com/segmentio/kafka-go"
+    "github.com/synaptica-ai/platform/pkg/common/config"
+    "github.com/synaptica-ai/platform/pkg/common/logger"
+    "github.com/synaptica-ai/platform/pkg/common/models"
 )
 
 type Consumer struct {
