@@ -49,3 +49,7 @@ build/
 tmp/
 temp/
 
+# Go build caches (should not be committed)
+.gocache/
+.gobuildcache/
+
