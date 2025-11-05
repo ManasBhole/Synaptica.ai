@@ -37,6 +37,8 @@ func main() {
 		router.Use(middleware.Authenticate(oidcAuth))
 	}
 	router.Use(middleware.RLS) // Row-Level Security
+	router.Use(middleware.CORS)
+	router.Use(middleware.RateLimit(50, 100)) // basic per-process limiter
 
 	// Health check
 	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

@@ -1,12 +1,14 @@
 package middleware
 
 import (
-	"context"
-	"net/http"
-	"time"
+    "context"
+    "net/http"
+    "sync"
+    "time"
 
-	"github.com/synaptica-ai/platform/pkg/common/logger"
-	"github.com/synaptica-ai/platform/pkg/gateway/auth"
+    "github.com/google/uuid"
+    "github.com/synaptica-ai/platform/pkg/common/logger"
+    "github.com/synaptica-ai/platform/pkg/gateway/auth"
 )
 
 type contextKey string
@@ -15,14 +17,20 @@ const UserContextKey contextKey = "user"
 
 func Logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
+        start := time.Now()
+        // Ensure a request ID exists
+        reqID := r.Header.Get("X-Request-ID")
+        if reqID == "" { reqID = uuid.New().String() }
 
-		next.ServeHTTP(w, r)
+        // Propagate request ID downstream
+        r.Header.Set("X-Request-ID", reqID)
+        next.ServeHTTP(w, r)
 
 		logger.Log.WithFields(map[string]interface{}{
 			"method":     r.Method,
 			"path":       r.URL.Path,
 			"remote_addr": r.RemoteAddr,
+            "request_id": reqID,
 			"duration":   time.Since(start).Milliseconds(),
 		}).Info("HTTP request")
 	})
@@ -86,5 +94,54 @@ func RLS(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// Simple token-bucket rate limiter middleware (per-process)
+func RateLimit(rps int, burst int) func(http.Handler) http.Handler {
+    type bucket struct{
+        tokens int
+        last time.Time
+        mu sync.Mutex
+    }
+    b := &bucket{ tokens: burst, last: time.Now() }
+    refill := func() {
+        now := time.Now()
+        elapsed := now.Sub(b.last).Seconds()
+        add := int(elapsed * float64(rps))
+        if add > 0 {
+            b.tokens += add
+            if b.tokens > burst { b.tokens = burst }
+            b.last = now
+        }
+    }
+
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            b.mu.Lock()
+            refill()
+            if b.tokens <= 0 {
+                b.mu.Unlock()
+                http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+                return
+            }
+            b.tokens--
+            b.mu.Unlock()
+            next.ServeHTTP(w, r)
+        })
+    }
+}
+
+// CORS middleware (allow basic dev flows)
+func CORS(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Access-Control-Allow-Origin", "*")
+        w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Request-ID")
+        w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+        if r.Method == http.MethodOptions {
+            w.WriteHeader(http.StatusNoContent)
+            return
+        }
+        next.ServeHTTP(w, r)
+    })
 }
 
