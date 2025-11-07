@@ -3,14 +3,18 @@ package training
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/synaptica-ai/platform/pkg/common/logger"
 	"github.com/synaptica-ai/platform/pkg/common/models"
+	"github.com/synaptica-ai/platform/pkg/ml/linear"
 	"github.com/synaptica-ai/platform/pkg/storage"
 	"gorm.io/datatypes"
 )
@@ -120,14 +124,34 @@ func (s *Service) run(jobID uuid.UUID, input CreateJobInput) {
 
 	time.Sleep(s.delay)
 
-	metrics := map[string]interface{}{
-		"training_samples": len(trainingData),
-		"feature_views":    len(featureViews),
-		"duration_seconds": s.delay.Seconds(),
-		"timestamp":        time.Now().UTC(),
+	samples, labels, featureNames, buildErr := buildDataset(trainingData, input.Config)
+	if buildErr != nil {
+		s.failJob(ctx, jobID, buildErr)
+		return
 	}
 
-	artifactPath, err := s.writeArtifact(jobID, input, metrics)
+	opts := linear.Options{
+		Epochs:       intFromConfig(input.Config, "epochs", 200),
+		LearningRate: floatFromConfig(input.Config, "learning_rate", 0.01),
+	}
+	weights, trainMetrics := linear.TrainLogistic(samples, labels, opts)
+
+	metrics := map[string]interface{}{
+		"training_samples": len(samples),
+		"feature_views":    len(featureViews),
+		"epochs":           opts.Epochs,
+		"loss":             trainMetrics.Loss,
+		"accuracy":         trainMetrics.Accuracy,
+		"duration_seconds": s.delay.Seconds(),
+		"timestamp":        time.Now().UTC(),
+		"threshold":        floatFromConfig(input.Config, "threshold", 120),
+		"weights": map[string]interface{}{
+			"bias":         weights.Bias,
+			"coefficients": weights.Coefficients,
+		},
+	}
+
+	artifactPath, err := s.writeArtifact(jobID, input, metrics, weights, featureNames)
 	if err != nil {
 		s.failJob(ctx, jobID, fmt.Errorf("artifact write failed: %w", err))
 		return
@@ -149,10 +173,18 @@ func (s *Service) failJob(ctx context.Context, jobID uuid.UUID, err error) {
 	_ = s.repo.SetTimestamps(ctx, jobID, nil, &completed)
 }
 
-func (s *Service) writeArtifact(jobID uuid.UUID, input CreateJobInput, metrics map[string]interface{}) (string, error) {
+func (s *Service) writeArtifact(jobID uuid.UUID, input CreateJobInput, metrics map[string]interface{}, weights linear.Weights, featureNames []string) (string, error) {
 	artifact := map[string]interface{}{
-		"job_id":     jobID.String(),
-		"model":      input.ModelType,
+		"job_id": jobID.String(),
+		"model": map[string]interface{}{
+			"type":          input.ModelType,
+			"algorithm":     "logistic_regression",
+			"feature_names": featureNames,
+			"weights": map[string]interface{}{
+				"bias":         weights.Bias,
+				"coefficients": weights.Coefficients,
+			},
+		},
 		"config":     input.Config,
 		"filters":    input.Filters,
 		"metrics":    metrics,
@@ -162,9 +194,16 @@ func (s *Service) writeArtifact(jobID uuid.UUID, input CreateJobInput, metrics m
 	if err != nil {
 		return "", err
 	}
+	if err := os.MkdirAll(s.artifactDir, 0o755); err != nil {
+		return "", err
+	}
 	path := filepath.Join(s.artifactDir, fmt.Sprintf("%s.json", jobID.String()))
 	if err := os.WriteFile(path, payload, 0o644); err != nil {
 		return "", err
+	}
+	latestPath := filepath.Join(s.artifactDir, fmt.Sprintf("%s_latest.json", input.ModelType))
+	if err := os.WriteFile(latestPath, payload, 0o644); err != nil {
+		logger.Log.WithError(err).Warn("failed to update latest artifact pointer")
 	}
 	return path, nil
 }
@@ -203,4 +242,84 @@ func extractFeatureNames(config map[string]interface{}) []string {
 		return names
 	}
 	return nil
+}
+
+func floatFromConfig(config map[string]interface{}, key string, defaultVal float64) float64 {
+	if config == nil {
+		return defaultVal
+	}
+	if val, ok := config[key]; ok {
+		switch v := val.(type) {
+		case float64:
+			return v
+		case int:
+			return float64(v)
+		}
+	}
+	return defaultVal
+}
+
+func intFromConfig(config map[string]interface{}, key string, defaultVal int) int {
+	if config == nil {
+		return defaultVal
+	}
+	if val, ok := config[key]; ok {
+		switch v := val.(type) {
+		case float64:
+			return int(v)
+		case int:
+			return v
+		}
+	}
+	return defaultVal
+}
+
+func buildDataset(trainingData []map[string]interface{}, config map[string]interface{}) ([][]float64, []float64, []string, error) {
+	threshold := floatFromConfig(config, "threshold", 120)
+	var samples [][]float64
+	var labels []float64
+	featureNames := []string{"value"}
+	for _, record := range trainingData {
+		canonical, ok := record["canonical"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		value, err := numericFromAny(canonical["value"])
+		if err != nil {
+			continue
+		}
+		samples = append(samples, []float64{value})
+		if value >= threshold {
+			labels = append(labels, 1)
+		} else {
+			labels = append(labels, 0)
+		}
+	}
+	if len(samples) == 0 {
+		return nil, nil, nil, errors.New("no numeric data available for training")
+	}
+	return samples, labels, featureNames, nil
+}
+
+func numericFromAny(value interface{}) (float64, error) {
+	switch v := value.(type) {
+	case float64:
+		return v, nil
+	case int:
+		return float64(v), nil
+	case int64:
+		return float64(v), nil
+	case string:
+		return strconvParse(v)
+	default:
+		return 0, fmt.Errorf("unsupported value type %T", value)
+	}
+}
+
+func strconvParse(s string) (float64, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, fmt.Errorf("empty")
+	}
+	return strconv.ParseFloat(s, 64)
 }

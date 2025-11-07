@@ -101,6 +101,10 @@ flowchart LR
 - `cleanroom-service`: Clean room with differential privacy
 - `storage-service`: Emulates Delta/ClickHouse sinks for feature store
 
+### Services
+- `cmd/training-service`: queues and trains logistic regression risk models, persists metrics/artifacts, exposes job and artifact APIs
+- `cmd/serving-service`: serves real-time predictions using latest trained artifacts and Redis hot features
+
 ## Tech Stack
 
 - **Language**: Go 1.21+
@@ -111,6 +115,7 @@ flowchart LR
 - `TRAINING_ARTIFACT_DIR`: directory where simulated model artifacts are written (`artifacts/training`)
 - `TRAINING_MAX_WORKERS`: concurrent training jobs (default 2)
 - `TRAINING_SIMULATION_DELAY`: duration to simulate training work (default 5s)
+- `SERVING` uses artifacts written to `TRAINING_ARTIFACT_DIR` to compute logistic risk scores in real time
 - **Databases**: PostgreSQL (OLTP), ClickHouse (RT OLAP), Redis (Cache)
 - **Message Queue**: Kafka
 - **API Gateway**: Custom implementation with OIDC/mTLS
@@ -176,6 +181,36 @@ go test ./...
 
 # Build all services
 ./scripts/build.sh
+```
+
+### Trigger a training job (logistic regression on canonical value threshold)
+
+```bash
+curl -X POST http://localhost:8088/api/v1/training/jobs \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "model_type": "risk-score",
+        "config": {"learning_rate": 0.05, "epochs": 300, "threshold": 115},
+        "filters": {"patient_ids": ["patient-001", "patient-002"]}
+      }'
+
+# Fetch latest training jobs
+curl http://localhost:8088/api/v1/training/jobs?limit=5
+
+# Retrieve job artifact (weights, metrics, config)
+curl http://localhost:8088/api/v1/training/jobs/<JOB_ID>/artifact
+```
+
+### Invoke prediction after training
+
+```bash
+curl -X POST http://localhost:8089/api/v1/predict \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "patient_id": "patient-001",
+        "model_name": "risk-score",
+        "features": {"value": 123}
+      }'
 ```
 
 ## Configuration
