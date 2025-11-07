@@ -74,6 +74,12 @@ type Config struct {
 	NormalizerOutputTopic      string
 	NormalizerDLQTopic         string
 	NormalizerAllowedResources []string
+
+	// Record Linkage
+	LinkageOutputTopic       string
+	LinkageDLQTopic          string
+	LinkageDeterministicKeys []string
+	LinkageThreshold         float64
 }
 
 func Load() *Config {
@@ -132,6 +138,11 @@ func Load() *Config {
 		NormalizerOutputTopic:      getEnv("NORMALIZER_KAFKA_TOPIC", "normalized-events"),
 		NormalizerDLQTopic:         getEnv("NORMALIZER_DLQ_TOPIC", "normalized-events-dlq"),
 		NormalizerAllowedResources: getStringSliceEnv("NORMALIZER_ALLOWED_RESOURCES", []string{"observation", "condition", "procedure"}),
+
+		LinkageOutputTopic:       getEnv("LINKAGE_KAFKA_TOPIC", "linked-events"),
+		LinkageDLQTopic:          getEnv("LINKAGE_DLQ_TOPIC", "linked-events-dlq"),
+		LinkageDeterministicKeys: getStringSliceEnv("LINKAGE_DETERMINISTIC_KEYS", []string{"patient_id", "token_patient_id"}),
+		LinkageThreshold:         getFloatEnv("LINKAGE_THRESHOLD", 0.85),
 	}
 }
 
@@ -172,6 +183,15 @@ func getDuration(key string, defaultValue time.Duration) time.Duration {
 	if value := os.Getenv(key); value != "" {
 		if duration, err := time.ParseDuration(value); err == nil {
 			return duration
+		}
+	}
+	return defaultValue
+}
+
+func getFloatEnv(key string, defaultValue float64) float64 {
+	if value := os.Getenv(key); value != "" {
+		if floatValue, err := strconv.ParseFloat(value, 64); err == nil {
+			return floatValue
 		}
 	}
 	return defaultValue

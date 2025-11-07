@@ -19,3 +19,23 @@ CREATE TABLE IF NOT EXISTS deid_token_vault (
     value TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS master_patients (
+    id UUID PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS patient_linkages (
+    id UUID PRIMARY KEY,
+    master_id UUID REFERENCES master_patients(id),
+    patient_id TEXT NOT NULL,
+    deterministic_key TEXT,
+    score DOUBLE PRECISION NOT NULL,
+    method TEXT NOT NULL,
+    attributes JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_patient_linkages_master ON patient_linkages(master_id);
+CREATE INDEX IF NOT EXISTS idx_patient_linkages_patient ON patient_linkages(patient_id);
+CREATE INDEX IF NOT EXISTS idx_patient_linkages_det_key ON patient_linkages(deterministic_key);

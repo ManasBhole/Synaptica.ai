@@ -126,6 +126,7 @@ docker-compose up -d
 psql postgresql://synaptica:synaptica123@localhost:5432/synaptica -f db/schema.sql
 psql postgresql://synaptica:synaptica123@localhost:5432/synaptica -f db/seed/ingestion_requests.sql
 psql postgresql://synaptica:synaptica123@localhost:5432/synaptica -f db/seed/normalized_records.sql
+psql postgresql://synaptica:synaptica123@localhost:5432/synaptica -f db/seed/patient_linkages.sql
 
 # Run services (each in separate terminal)
 cd cmd/api-gateway && go run main.go
@@ -149,6 +150,9 @@ Key variables for production hardening:
 - `TERMINOLOGY_CATALOG_PATH`: YAML vocabulary for SNOMED/LOINC/ICD mappings (`configs/terminology.yaml`)
 - `NORMALIZER_KAFKA_TOPIC` / `NORMALIZER_DLQ_TOPIC`
 - `NORMALIZER_ALLOWED_RESOURCES`: resource types transformer will accept
+- `LINKAGE_KAFKA_TOPIC` / `LINKAGE_DLQ_TOPIC`
+- `LINKAGE_DETERMINISTIC_KEYS`: fields used for exact matching (`patient_id,token_patient_id`)
+- `LINKAGE_THRESHOLD`: probabilistic match threshold (default 0.85)
 
 ### Development
 
