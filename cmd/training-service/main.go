@@ -13,13 +13,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/synaptica-ai/platform/pkg/common/config"
+	"github.com/synaptica-ai/platform/pkg/common/database"
 	"github.com/synaptica-ai/platform/pkg/common/logger"
 	"github.com/synaptica-ai/platform/pkg/common/models"
 	"github.com/synaptica-ai/platform/pkg/storage"
 )
 
 type TrainingService struct {
-	lakehouse   *storage.LakehouseStorage
+	lakehouse    *storage.LakehouseWriter
 	featureStore *storage.FeatureStore
 }
 
@@ -27,14 +28,20 @@ func main() {
 	logger.Init()
 	cfg := config.Load()
 
-	lakehouse, err := storage.NewLakehouseStorage()
+	db, err := database.GetPostgres()
 	if err != nil {
-		logger.Log.WithError(err).Fatal("Failed to initialize lakehouse")
+		logger.Log.WithError(err).Fatal("Failed to connect to database")
 	}
 
-	featureStore, err := storage.NewFeatureStore()
-	if err != nil {
-		logger.Log.WithError(err).Fatal("Failed to initialize feature store")
+	lakehouse := storage.NewLakehouseWriter(db)
+	if err := lakehouse.AutoMigrate(); err != nil {
+		logger.Log.WithError(err).Fatal("Failed to migrate lakehouse tables")
+	}
+
+	redisClient := database.GetRedis()
+	featureStore := storage.NewFeatureStore(db, redisClient, cfg.FeatureOnlinePrefix, cfg.FeatureCacheTTL)
+	if err := featureStore.AutoMigrate(); err != nil {
+		logger.Log.WithError(err).Fatal("Failed to migrate feature store tables")
 	}
 
 	service := &TrainingService{
@@ -133,8 +140,8 @@ func (s *TrainingService) handleGetStatus(w http.ResponseWriter, r *http.Request
 
 	// In production, would fetch from database
 	status := map[string]interface{}{
-		"job_id": id,
-		"status": "completed",
+		"job_id":   id,
+		"status":   "completed",
 		"progress": 100,
 	}
 
@@ -144,7 +151,7 @@ func (s *TrainingService) handleGetStatus(w http.ResponseWriter, r *http.Request
 
 func (s *TrainingService) trainModel(ctx context.Context, job models.TrainingJob) {
 	logger.Log.WithFields(map[string]interface{}{
-		"job_id": job.ID,
+		"job_id":     job.ID,
 		"model_type": job.ModelType,
 	}).Info("Starting model training")
 
@@ -165,7 +172,7 @@ func (s *TrainingService) trainModel(ctx context.Context, job models.TrainingJob
 
 	logger.Log.WithFields(map[string]interface{}{
 		"training_samples": len(trainingData),
-		"feature_views": len(featureViews),
+		"feature_views":    len(featureViews),
 	}).Info("Training data prepared")
 
 	// In production, would:
@@ -178,4 +185,3 @@ func (s *TrainingService) trainModel(ctx context.Context, job models.TrainingJob
 
 	logger.Log.WithField("job_id", job.ID).Info("Model training completed")
 }
-

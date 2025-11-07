@@ -80,6 +80,14 @@ type Config struct {
 	LinkageDLQTopic          string
 	LinkageDeterministicKeys []string
 	LinkageThreshold         float64
+
+	// Storage / Feature Store
+	LakehouseTable         string
+	OlapTable              string
+	FeatureOfflineTable    string
+	FeatureOnlinePrefix    string
+	FeatureMaterializeCron string
+	FeatureCacheTTL        time.Duration
 }
 
 func Load() *Config {
@@ -143,6 +151,13 @@ func Load() *Config {
 		LinkageDLQTopic:          getEnv("LINKAGE_DLQ_TOPIC", "linked-events-dlq"),
 		LinkageDeterministicKeys: getStringSliceEnv("LINKAGE_DETERMINISTIC_KEYS", []string{"patient_id", "token_patient_id"}),
 		LinkageThreshold:         getFloatEnv("LINKAGE_THRESHOLD", 0.85),
+
+		LakehouseTable:         getEnv("LAKEHOUSE_TABLE", "lakehouse_facts"),
+		OlapTable:              getEnv("OLAP_TABLE", "olap_rollups"),
+		FeatureOfflineTable:    getEnv("FEATURE_OFFLINE_TABLE", "feature_offline_store"),
+		FeatureOnlinePrefix:    getEnv("FEATURE_ONLINE_PREFIX", "feature:"),
+		FeatureMaterializeCron: getEnv("FEATURE_MATERIALIZE_CRON", "@every 1m"),
+		FeatureCacheTTL:        getDuration("FEATURE_CACHE_TTL", 5*time.Minute),
 	}
 }
 

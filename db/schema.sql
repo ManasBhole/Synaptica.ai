@@ -20,6 +20,43 @@ CREATE TABLE IF NOT EXISTS deid_token_vault (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS lakehouse_facts (
+    id UUID PRIMARY KEY,
+    master_id UUID,
+    patient_id TEXT NOT NULL,
+    resource_type TEXT NOT NULL,
+    canonical JSONB NOT NULL,
+    codes JSONB,
+    timestamp TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_lakehouse_patient ON lakehouse_facts(patient_id);
+CREATE INDEX IF NOT EXISTS idx_lakehouse_master ON lakehouse_facts(master_id);
+
+CREATE TABLE IF NOT EXISTS olap_rollups (
+    id UUID PRIMARY KEY,
+    master_id UUID,
+    patient_id TEXT,
+    metric TEXT NOT NULL,
+    value JSONB NOT NULL,
+    event_time TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_olap_metric ON olap_rollups(metric);
+CREATE INDEX IF NOT EXISTS idx_olap_patient ON olap_rollups(patient_id);
+
+CREATE TABLE IF NOT EXISTS feature_offline_store (
+    id TEXT PRIMARY KEY,
+    patient_id TEXT NOT NULL,
+    features JSONB NOT NULL,
+    version INTEGER NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_feature_patient ON feature_offline_store(patient_id);
+
 CREATE TABLE IF NOT EXISTS master_patients (
     id UUID PRIMARY KEY,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

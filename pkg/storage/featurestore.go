@@ -6,94 +6,98 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/synaptica-ai/platform/pkg/common/config"
-	"github.com/synaptica-ai/platform/pkg/common/database"
-	"github.com/synaptica-ai/platform/pkg/common/logger"
-	"github.com/synaptica-ai/platform/pkg/common/models"
+	"github.com/redis/go-redis/v9"
+	"gorm.io/datatypes"
+	"gorm.io/gorm"
 )
 
+type OfflineFeature struct {
+	ID        string            `gorm:"primaryKey;column:id"`
+	PatientID string            `gorm:"column:patient_id"`
+	Features  datatypes.JSONMap `gorm:"column:features"`
+	Version   int               `gorm:"column:version"`
+	CreatedAt time.Time         `gorm:"column:created_at"`
+}
+
+func (OfflineFeature) TableName() string {
+	return "feature_offline_store"
+}
+
 type FeatureStore struct {
-	redisClient interface{} // Redis for online features
-	db          interface{} // For offline features
-	cacheTTL    time.Duration
+	offlineDB *gorm.DB
+	online    *redis.Client
+	cacheTTL  time.Duration
+	keyPrefix string
 }
 
-func NewFeatureStore() (*FeatureStore, error) {
-	cfg := config.Load()
-	redisClient := database.GetRedis()
-
-	// In production, would initialize proper feature store (Feast, Tecton, etc.)
-	return &FeatureStore{
-		redisClient: redisClient,
-		cacheTTL:    cfg.FeatureStoreCacheTTL,
-	}, nil
-}
-
-func (f *FeatureStore) BuildFeatures(ctx context.Context, patientID string, data []map[string]interface{}) (models.FeatureSet, error) {
-	// Build features from batch data
-	logger.Log.WithField("patient_id", patientID).Info("Building features")
-
-	features := make(map[string]models.Feature)
-	for _, record := range data {
-		// Extract features from records
-		for key, value := range record {
-			features[key] = models.Feature{
-				Name:      key,
-				Value:     value,
-				Timestamp: time.Now(),
-			}
-		}
+func NewFeatureStore(db *gorm.DB, redisClient *redis.Client, prefix string, ttl time.Duration) *FeatureStore {
+	if ttl <= 0 {
+		ttl = 5 * time.Minute
 	}
+	return &FeatureStore{offlineDB: db, online: redisClient, cacheTTL: ttl, keyPrefix: prefix}
+}
 
-	return models.FeatureSet{
+func (fs *FeatureStore) AutoMigrate() error {
+	return fs.offlineDB.AutoMigrate(&OfflineFeature{})
+}
+
+func (fs *FeatureStore) BuildFeatures(ctx context.Context, patientID string, features map[string]interface{}, version int) error {
+	if features == nil {
+		features = map[string]interface{}{}
+	}
+	record := &OfflineFeature{
+		ID:        fmt.Sprintf("%s:%d", patientID, version),
 		PatientID: patientID,
-		Features:  features,
-		Version:   1,
-	}, nil
+		Features:  datatypes.JSONMap(features),
+		Version:   version,
+		CreatedAt: time.Now().UTC(),
+	}
+	return fs.offlineDB.WithContext(ctx).Create(record).Error
 }
 
-func (f *FeatureStore) GetFeatureViews(ctx context.Context, featureNames []string) (map[string]interface{}, error) {
-	// Get feature views for training
-	logger.Log.WithField("features", featureNames).Info("Getting feature views")
-
-	// In production, would query feature store
-	return map[string]interface{}{}, nil
-}
-
-func (f *FeatureStore) MaterializeHotFeatures(ctx context.Context, patientID string, features models.FeatureSet) error {
-	// Materialize hot features to Redis cache for <10ms p95 latency
-	logger.Log.WithField("patient_id", patientID).Info("Materializing hot features to cache")
-
-	// Serialize features
-	data, err := json.Marshal(features)
+func (fs *FeatureStore) MaterializeHotFeatures(ctx context.Context, patientID string, features map[string]interface{}) error {
+	if fs.online == nil {
+		return nil
+	}
+	payload, err := json.Marshal(features)
 	if err != nil {
 		return err
 	}
-
-	// In production, would write to Redis with proper key
-	key := fmt.Sprintf("features:%s", patientID)
-	logger.Log.WithFields(map[string]interface{}{
-		"key": key,
-		"size": len(data),
-	}).Debug("Caching features")
-
-	// Would use: redisClient.Set(ctx, key, data, f.cacheTTL)
-	return nil
+	key := fmt.Sprintf("%s%s", fs.keyPrefix, patientID)
+	return fs.online.Set(ctx, key, payload, fs.cacheTTL).Err()
 }
 
-func (f *FeatureStore) GetFeatures(ctx context.Context, patientID string) (models.FeatureSet, error) {
-	// Get features from cache (p95 < 10ms)
-	key := fmt.Sprintf("features:%s", patientID)
-
-	logger.Log.WithField("key", key).Debug("Getting features from cache")
-
-	// In production, would read from Redis
-	// data, err := redisClient.Get(ctx, key).Result()
-
-	return models.FeatureSet{
-		PatientID: patientID,
-		Features:  make(map[string]models.Feature),
-		Version:   1,
-	}, nil
+func (fs *FeatureStore) GetFeatures(ctx context.Context, patientID string) (map[string]interface{}, error) {
+	if fs.online == nil {
+		return map[string]interface{}{}, nil
+	}
+	key := fmt.Sprintf("%s%s", fs.keyPrefix, patientID)
+	val, err := fs.online.Get(ctx, key).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return map[string]interface{}{}, nil
+		}
+		return map[string]interface{}{}, err
+	}
+	var features map[string]interface{}
+	if err := json.Unmarshal([]byte(val), &features); err != nil {
+		return map[string]interface{}{}, err
+	}
+	return features, nil
 }
 
+func (fs *FeatureStore) GetFeatureViews(ctx context.Context, names []string) (map[string]interface{}, error) {
+	var rows []OfflineFeature
+	query := fs.offlineDB.WithContext(ctx).Order("created_at desc").Limit(200)
+	if len(names) > 0 {
+		query = query.Where("id IN ?", names)
+	}
+	if err := query.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	result := make(map[string]interface{}, len(rows))
+	for _, row := range rows {
+		result[row.ID] = map[string]interface{}(row.Features)
+	}
+	return result, nil
+}

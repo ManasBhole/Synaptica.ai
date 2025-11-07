@@ -12,14 +12,15 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/synaptica-ai/platform/pkg/common/config"
+	"github.com/synaptica-ai/platform/pkg/common/database"
 	"github.com/synaptica-ai/platform/pkg/common/logger"
 	"github.com/synaptica-ai/platform/pkg/common/models"
 	"github.com/synaptica-ai/platform/pkg/storage"
 )
 
 type CohortService struct {
-	lakehouse *storage.LakehouseStorage
-	rtolap    *storage.RTOLAPStorage
+	lakehouse *storage.LakehouseWriter
+	rtolap    *storage.OLAPWriter
 	llmClient interface{} // LLM service client
 }
 
@@ -27,14 +28,19 @@ func main() {
 	logger.Init()
 	cfg := config.Load()
 
-	lakehouse, err := storage.NewLakehouseStorage()
+	db, err := database.GetPostgres()
 	if err != nil {
-		logger.Log.WithError(err).Fatal("Failed to initialize lakehouse")
+		logger.Log.WithError(err).Fatal("Failed to connect to database")
 	}
 
-	rtolap, err := storage.NewRTOLAPStorage()
-	if err != nil {
-		logger.Log.WithError(err).Fatal("Failed to initialize RT OLAP")
+	lakehouse := storage.NewLakehouseWriter(db)
+	if err := lakehouse.AutoMigrate(); err != nil {
+		logger.Log.WithError(err).Fatal("Failed to migrate lakehouse tables")
+	}
+
+	rtolap := storage.NewOLAPWriter(db)
+	if err := rtolap.AutoMigrate(); err != nil {
+		logger.Log.WithError(err).Fatal("Failed to migrate OLAP tables")
 	}
 
 	service := &CohortService{
@@ -134,7 +140,7 @@ func (s *CohortService) handleVerify(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"valid": true,
+		"valid":   true,
 		"message": "DSL is valid",
 	})
 }
@@ -162,7 +168,7 @@ func (s *CohortService) handleGetCohort(w http.ResponseWriter, r *http.Request) 
 func (s *CohortService) verifyDSL(dsl string) error {
 	// DSL verifier - check syntax and semantics
 	// In production, would use proper parser/validator
-	
+
 	if dsl == "" {
 		return fmt.Errorf("DSL cannot be empty")
 	}
@@ -171,4 +177,3 @@ func (s *CohortService) verifyDSL(dsl string) error {
 	// In production, would use proper DSL parser
 	return nil
 }
-

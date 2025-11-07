@@ -99,10 +99,15 @@ flowchart LR
 - `training-service`: Model training with AutoML
 - `serving-service`: Model serving with Triton/Vertex/TF Serving
 - `cleanroom-service`: Clean room with differential privacy
+- `storage-service`: Emulates Delta/ClickHouse sinks for feature store
 
 ## Tech Stack
 
 - **Language**: Go 1.21+
+- `LAKEHOUSE_TABLE`, `OLAP_TABLE`: Postgres tables used to emulate Delta/ClickHouse sinks
+- `FEATURE_OFFLINE_TABLE`, `FEATURE_ONLINE_PREFIX`
+- `FEATURE_MATERIALIZE_CRON`: cadence for future background jobs (currently manual)
+- `FEATURE_CACHE_TTL`: TTL for Redis hot features (default 5m)
 - **Databases**: PostgreSQL (OLTP), ClickHouse (RT OLAP), Redis (Cache)
 - **Message Queue**: Kafka
 - **API Gateway**: Custom implementation with OIDC/mTLS
@@ -127,10 +132,12 @@ psql postgresql://synaptica:synaptica123@localhost:5432/synaptica -f db/schema.s
 psql postgresql://synaptica:synaptica123@localhost:5432/synaptica -f db/seed/ingestion_requests.sql
 psql postgresql://synaptica:synaptica123@localhost:5432/synaptica -f db/seed/normalized_records.sql
 psql postgresql://synaptica:synaptica123@localhost:5432/synaptica -f db/seed/patient_linkages.sql
+psql postgresql://synaptica:synaptica123@localhost:5432/synaptica -f db/seed/storage_facts.sql
 
 # Run services (each in separate terminal)
 cd cmd/api-gateway && go run main.go
 cd cmd/ingestion-service && go run main.go
+cd cmd/storage-service && go run main.go
 # ... etc
 ```
 

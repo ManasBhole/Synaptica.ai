@@ -12,6 +12,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/synaptica-ai/platform/pkg/common/config"
+	"github.com/synaptica-ai/platform/pkg/common/database"
 	"github.com/synaptica-ai/platform/pkg/common/logger"
 	"github.com/synaptica-ai/platform/pkg/common/models"
 	"github.com/synaptica-ai/platform/pkg/storage"
@@ -27,9 +28,15 @@ func main() {
 	logger.Init()
 	cfg := config.Load()
 
-	featureStore, err := storage.NewFeatureStore()
+	db, err := database.GetPostgres()
 	if err != nil {
-		logger.Log.WithError(err).Fatal("Failed to initialize feature store")
+		logger.Log.WithError(err).Fatal("Failed to connect to database")
+	}
+
+	redisClient := database.GetRedis()
+	featureStore := storage.NewFeatureStore(db, redisClient, cfg.FeatureOnlinePrefix, cfg.FeatureCacheTTL)
+	if err := featureStore.AutoMigrate(); err != nil {
+		logger.Log.WithError(err).Fatal("Failed to migrate feature store tables")
 	}
 
 	service := &ServingService{
@@ -98,13 +105,9 @@ func (s *ServingService) handlePredict(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Merge with provided features
 	features := make(map[string]interface{})
-	for name, feature := range featureSet.Features {
-		features[name] = feature.Value
-	}
-	for key, value := range req.Features {
-		features[key] = value
+	for name, value := range featureSet {
+		features[name] = value
 	}
 
 	// Call model backend for prediction
@@ -153,7 +156,7 @@ func (s *ServingService) predict(ctx context.Context, modelName string, features
 	// For now, return mock prediction
 
 	logger.Log.WithFields(map[string]interface{}{
-		"model": modelName,
+		"model":    modelName,
 		"features": len(features),
 	}).Debug("Making prediction")
 
@@ -165,4 +168,3 @@ func (s *ServingService) predict(ctx context.Context, modelName string, features
 
 	return predictions, 0.85, nil
 }
-
