@@ -213,6 +213,13 @@ curl -X POST http://localhost:8089/api/v1/predict \
       }'
 ```
 
+### Install frontend dependencies
+cd frontend
+npm install
+
+# Run the Next.js UI
+yarn dev  # or `npm run dev`
+
 ## Configuration
 
 Services use environment variables for configuration. See `.env.example` for details.
