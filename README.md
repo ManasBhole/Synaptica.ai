@@ -122,11 +122,27 @@ flowchart LR
 # Start infrastructure
 docker-compose up -d
 
+# Apply database schema and seed data
+psql postgresql://synaptica:synaptica123@localhost:5432/synaptica -f db/schema.sql
+psql postgresql://synaptica:synaptica123@localhost:5432/synaptica -f db/seed/ingestion_requests.sql
+
 # Run services (each in separate terminal)
 cd cmd/api-gateway && go run main.go
 cd cmd/ingestion-service && go run main.go
 # ... etc
 ```
+
+### Environment Variables
+
+Key variables for production hardening:
+
+- `INGESTION_ALLOWED_SOURCES`: comma-separated list of onboarding sources (default: hospital,lab,imaging,wearable,telehealth)
+- `INGESTION_KAFKA_TOPIC`: topic for main ingestion events (default: `upstream-events`)
+- `INGESTION_DLQ_TOPIC`: dead-letter topic for failed publishes (`upstream-events-dlq`)
+- `MAX_REQUEST_BODY_BYTES`: request payload limit (default 4MB)
+- `GATEWAY_RATE_LIMIT_RPS` / `GATEWAY_RATE_LIMIT_BURST`: rate limiting controls
+- `GATEWAY_REQUEST_TIMEOUT`: timeout for gateway to downstream services
+- `INGESTION_STATUS_TTL`: retention window for ingestion audit records (default 7 days)
 
 ### Development
 

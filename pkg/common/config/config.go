@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -57,6 +58,12 @@ type Config struct {
 	GatewayRequestTimeout time.Duration
 	GatewayRateLimitRPS   int
 	GatewayRateLimitBurst int
+
+	// Ingestion specific
+	IngestionAllowedSources []string
+	IngestionKafkaTopic     string
+	IngestionDLQTopic       string
+	IngestionStatusTTL      time.Duration
 }
 
 func Load() *Config {
@@ -100,8 +107,13 @@ func Load() *Config {
 
 		IngestionBaseURL:      getEnv("INGESTION_BASE_URL", "http://localhost:8081"),
 		GatewayRequestTimeout: getDuration("GATEWAY_REQUEST_TIMEOUT", 10*time.Second),
-		GatewayRateLimitRPS:   getIntEnv("GATEWAY_RATE_LIMIT_RPS", 50),
-		GatewayRateLimitBurst: getIntEnv("GATEWAY_RATE_LIMIT_BURST", 100),
+		GatewayRateLimitRPS:   getIntEnv("GATEWAY_RATE_LIMIT_RPS", 100),
+		GatewayRateLimitBurst: getIntEnv("GATEWAY_RATE_LIMIT_BURST", 200),
+
+		IngestionAllowedSources: getStringSliceEnv("INGESTION_ALLOWED_SOURCES", []string{"hospital", "lab", "imaging", "wearable", "telehealth"}),
+		IngestionKafkaTopic:     getEnv("INGESTION_KAFKA_TOPIC", "upstream-events"),
+		IngestionDLQTopic:       getEnv("INGESTION_DLQ_TOPIC", "upstream-events-dlq"),
+		IngestionStatusTTL:      getDuration("INGESTION_STATUS_TTL", 7*24*time.Hour),
 	}
 }
 
@@ -123,7 +135,17 @@ func getIntEnv(key string, defaultValue int) int {
 
 func getStringSliceEnv(key string, defaultValue []string) []string {
 	if value := os.Getenv(key); value != "" {
-		return []string{value}
+		parts := strings.Split(value, ",")
+		var out []string
+		for _, part := range parts {
+			trimmed := strings.TrimSpace(part)
+			if trimmed != "" {
+				out = append(out, trimmed)
+			}
+		}
+		if len(out) > 0 {
+			return out
+		}
 	}
 	return defaultValue
 }
