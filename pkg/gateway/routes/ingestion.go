@@ -1,39 +1,47 @@
 package routes
 
 import (
-    "bytes"
-    "context"
-    "encoding/json"
-    "io"
-    "net/http"
-    "os"
-    "time"
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
 
-    "github.com/google/uuid"
-    "github.com/gorilla/mux"
-    "github.com/synaptica-ai/platform/pkg/common/logger"
-    "github.com/synaptica-ai/platform/pkg/common/models"
+	"github.com/google/uuid"
+	"github.com/gorilla/mux"
+	"github.com/synaptica-ai/platform/pkg/common/config"
+	"github.com/synaptica-ai/platform/pkg/common/logger"
+	"github.com/synaptica-ai/platform/pkg/common/models"
+	"github.com/synaptica-ai/platform/pkg/gateway/httpclient"
 )
 
-func RegisterIngestionRoutes(router *mux.Router) {
-	router.HandleFunc("/ingest", handleIngest).Methods("POST")
-	router.HandleFunc("/ingest/status/{id}", handleIngestStatus).Methods("GET")
+type IngestionProxy struct {
+	Client *http.Client
+	Cfg    *config.Config
 }
 
-func handleIngest(w http.ResponseWriter, r *http.Request) {
+func RegisterIngestionRoutes(router *mux.Router, proxy *IngestionProxy) {
+	if proxy == nil || proxy.Client == nil || proxy.Cfg == nil {
+		panic("ingestion proxy requires client and config")
+	}
+
+	router.HandleFunc("/ingest", proxy.handleIngest).Methods(http.MethodPost)
+	router.HandleFunc("/ingest/status/{id}", proxy.handleIngestStatus).Methods(http.MethodGet)
+}
+
+func (p *IngestionProxy) handleIngest(w http.ResponseWriter, r *http.Request) {
 	var req models.IngestRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, p.Cfg.MaxRequestBody)).Decode(&req); err != nil {
 		logger.Log.WithError(err).Error("Failed to decode request")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-    // Forward to ingestion service (configurable via env)
-    ingestionBase := os.Getenv("INGESTION_BASE_URL")
-    if ingestionBase == "" { ingestionBase = "http://localhost:8081" }
-    ingestionServiceURL := ingestionBase + "/api/v1/ingest"
+	ingestionServiceURL := fmt.Sprintf("%s/api/v1/ingest", p.Cfg.IngestionBaseURL)
 
-	resp, err := forwardRequest(r, ingestionServiceURL, req)
+	resp, status, err := p.forwardRequest(r, http.MethodPost, ingestionServiceURL, req)
 	if err != nil {
 		logger.Log.WithError(err).Error("Failed to forward to ingestion service")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -41,19 +49,17 @@ func handleIngest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
+	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(resp)
 }
 
-func handleIngestStatus(w http.ResponseWriter, r *http.Request) {
+func (p *IngestionProxy) handleIngestStatus(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
-    ingestionBase := os.Getenv("INGESTION_BASE_URL")
-    if ingestionBase == "" { ingestionBase = "http://localhost:8081" }
-    ingestionServiceURL := ingestionBase + "/api/v1/ingest/status/" + id
+	ingestionServiceURL := fmt.Sprintf("%s/api/v1/ingest/status/%s", p.Cfg.IngestionBaseURL, id)
 
-	resp, err := forwardRequest(r, ingestionServiceURL, nil)
+	resp, status, err := p.forwardRequest(r, http.MethodGet, ingestionServiceURL, nil)
 	if err != nil {
 		logger.Log.WithError(err).Error("Failed to forward to ingestion service")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -61,53 +67,65 @@ func handleIngestStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(resp)
 }
 
-func forwardRequest(r *http.Request, url string, body interface{}) (interface{}, error) {
-    // Correlation ID
-    corrID := r.Header.Get("X-Request-ID")
-    if corrID == "" { corrID = uuid.New().String() }
+func (p *IngestionProxy) forwardRequest(r *http.Request, method, url string, body interface{}) (interface{}, int, error) {
+	// Correlation ID
+	corrID := r.Header.Get("X-Request-ID")
+	if corrID == "" {
+		corrID = uuid.New().String()
+	}
 
-    // Prepare JSON body
-    var reqBody io.Reader
-    if body != nil {
-        b, err := json.Marshal(body)
-        if err != nil { return nil, err }
-        reqBody = bytes.NewBuffer(b)
-    }
+	// Prepare JSON body
+	var reqBody io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return nil, 0, err
+		}
+		reqBody = bytes.NewBuffer(b)
+	}
 
-    // New request with context timeout
-    ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-    defer cancel()
-    outReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, reqBody)
-    if err != nil { return nil, err }
+	ctx, cancel := context.WithTimeout(r.Context(), p.Cfg.GatewayRequestTimeout)
+	defer cancel()
+	outReq, err := http.NewRequestWithContext(ctx, method, url, reqBody)
+	if err != nil {
+		return nil, 0, err
+	}
 
-    // Copy headers and set correlation id
-    outReq.Header = make(http.Header)
-    for k, v := range r.Header { outReq.Header[k] = v }
-    outReq.Header.Set("Content-Type", "application/json")
-    outReq.Header.Set("X-Request-ID", corrID)
+	outReq.Header = make(http.Header)
+	for k, v := range r.Header {
+		outReq.Header[k] = v
+	}
+	outReq.Header.Set("Content-Type", "application/json")
+	outReq.Header.Set("X-Request-ID", corrID)
 
-    // HTTP client with timeouts
-    client := &http.Client{ Timeout: 12 * time.Second }
-    resp, err := client.Do(outReq)
-    if err != nil { return nil, err }
-    defer resp.Body.Close()
+	var resp *http.Response
+	reqErr := httpclient.Retry(ctx, 3, 200*time.Millisecond, func() error {
+		var doErr error
+		resp, doErr = p.Client.Do(outReq)
+		if doErr != nil && httpclient.IsRetriable(doErr) {
+			return doErr
+		}
+		return doErr
+	})
+	if reqErr != nil {
+		return nil, 0, reqErr
+	}
+	defer resp.Body.Close()
 
-    // Read response
-    var out interface{}
-    if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-        // if non-JSON, return status only
-        out = map[string]interface{}{"status": resp.Status}
-    }
+	var out interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		out = map[string]interface{}{"status": resp.Status}
+	}
 
-    logger.Log.WithFields(map[string]interface{}{
-        "url": url,
-        "status": resp.StatusCode,
-        "request_id": corrID,
-    }).Info("Forwarded request to ingestion service")
+	logger.Log.WithFields(map[string]interface{}{
+		"url":        url,
+		"status":     resp.StatusCode,
+		"request_id": corrID,
+	}).Info("Forwarded request to ingestion service")
 
-    return out, nil
+	return out, resp.StatusCode, nil
 }
-

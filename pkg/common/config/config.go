@@ -12,6 +12,7 @@ type Config struct {
 	ServerHost     string
 	ReadTimeout    time.Duration
 	WriteTimeout   time.Duration
+	MaxRequestBody int64
 
 	// Database
 	PostgresHost     string
@@ -29,7 +30,7 @@ type Config struct {
 
 	// Kafka
 	KafkaBrokers []string
-	KafkaGroupID  string
+	KafkaGroupID string
 
 	// ClickHouse
 	ClickHouseHost     string
@@ -50,6 +51,12 @@ type Config struct {
 
 	// Feature Store
 	FeatureStoreCacheTTL time.Duration
+
+	// Gateway specific
+	IngestionBaseURL      string
+	GatewayRequestTimeout time.Duration
+	GatewayRateLimitRPS   int
+	GatewayRateLimitBurst int
 }
 
 func Load() *Config {
@@ -58,6 +65,7 @@ func Load() *Config {
 		ServerHost:     getEnv("SERVER_HOST", "0.0.0.0"),
 		ReadTimeout:    getDuration("READ_TIMEOUT", 30*time.Second),
 		WriteTimeout:   getDuration("WRITE_TIMEOUT", 30*time.Second),
+		MaxRequestBody: int64(getIntEnv("MAX_REQUEST_BODY_BYTES", 4*1024*1024)),
 
 		PostgresHost:     getEnv("POSTGRES_HOST", "localhost"),
 		PostgresPort:     getEnv("POSTGRES_PORT", "5432"),
@@ -89,6 +97,11 @@ func Load() *Config {
 		LLMModelName: getEnv("LLM_MODEL_NAME", "gpt-4"),
 
 		FeatureStoreCacheTTL: getDuration("FEATURE_STORE_CACHE_TTL", 5*time.Minute),
+
+		IngestionBaseURL:      getEnv("INGESTION_BASE_URL", "http://localhost:8081"),
+		GatewayRequestTimeout: getDuration("GATEWAY_REQUEST_TIMEOUT", 10*time.Second),
+		GatewayRateLimitRPS:   getIntEnv("GATEWAY_RATE_LIMIT_RPS", 50),
+		GatewayRateLimitBurst: getIntEnv("GATEWAY_RATE_LIMIT_BURST", 100),
 	}
 }
 
@@ -123,4 +136,3 @@ func getDuration(key string, defaultValue time.Duration) time.Duration {
 	}
 	return defaultValue
 }
-

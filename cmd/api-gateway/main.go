@@ -13,6 +13,7 @@ import (
 	"github.com/synaptica-ai/platform/pkg/common/config"
 	"github.com/synaptica-ai/platform/pkg/common/logger"
 	"github.com/synaptica-ai/platform/pkg/gateway/auth"
+	"github.com/synaptica-ai/platform/pkg/gateway/httpclient"
 	"github.com/synaptica-ai/platform/pkg/gateway/middleware"
 	"github.com/synaptica-ai/platform/pkg/gateway/routes"
 )
@@ -27,6 +28,9 @@ func main() {
 		logger.Log.WithError(err).Warn("OIDC authentication not configured, running without auth")
 	}
 
+	// Shared HTTP client for downstream calls
+	client := httpclient.New(cfg.GatewayRequestTimeout)
+
 	// Setup router
 	router := mux.NewRouter()
 
@@ -38,7 +42,8 @@ func main() {
 	}
 	router.Use(middleware.RLS) // Row-Level Security
 	router.Use(middleware.CORS)
-	router.Use(middleware.RateLimit(50, 100)) // basic per-process limiter
+	router.Use(middleware.RateLimit(cfg.GatewayRateLimitRPS, cfg.GatewayRateLimitBurst))
+	router.Use(middleware.BodyLimit(cfg.MaxRequestBody))
 
 	// Health check
 	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -46,9 +51,16 @@ func main() {
 		w.Write([]byte(`{"status":"healthy"}`))
 	}).Methods("GET")
 
+	router.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
+		// TODO: add downstream checks (Kafka, etc.) once available
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ready"}`))
+	}).Methods("GET")
+
 	// API routes
 	apiRouter := router.PathPrefix("/api/v1").Subrouter()
-	routes.RegisterIngestionRoutes(apiRouter)
+	ingestionProxy := &routes.IngestionProxy{Client: client, Cfg: cfg}
+	routes.RegisterIngestionRoutes(apiRouter, ingestionProxy)
 
 	// Server
 	server := &http.Server{
@@ -87,4 +99,3 @@ func main() {
 
 	logger.Log.Info("API Gateway stopped")
 }
-
