@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentProps } from "react";
+import type { ComponentProps, ElementType } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Route } from "next";
@@ -9,7 +9,7 @@ import { ChartBarIcon, Cog6ToothIcon, CpuChipIcon, Squares2X2Icon } from "@heroi
 type NavLink = {
   label: string;
   href: Route;
-  icon: (props: ComponentProps<typeof Squares2X2Icon>) => JSX.Element;
+  icon: ElementType<ComponentProps<typeof Squares2X2Icon>>;
 };
 
 const links: NavLink[] = [
