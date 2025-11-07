@@ -37,10 +37,10 @@ const TrainingContent = () => {
             </div>
             <button
               onClick={() => mutation.mutate()}
-              disabled={mutation.isLoading}
+              disabled={mutation.status === "pending"}
               className="rounded-full bg-primary-500 px-5 py-2 text-sm font-medium text-white transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:bg-white/10"
             >
-              {mutation.isLoading ? "Scheduling…" : "Schedule new training"}
+              {mutation.status === "pending" ? "Scheduling…" : "Schedule new training"}
             </button>
           </div>
           <table className="mt-6 w-full text-sm text-white/70">
