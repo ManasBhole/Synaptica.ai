@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.6
-ARG GO_VERSION=1.22
+ARG GO_VERSION=1.23
 FROM golang:${GO_VERSION}-alpine AS builder
 RUN apk add --no-cache build-base git
 WORKDIR /src
