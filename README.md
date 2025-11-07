@@ -224,6 +224,12 @@ yarn dev  # or `npm run dev`
 
 Services use environment variables for configuration. See `.env.example` for details.
 
+## Cloud / Hosting
+
+For end-to-end hosting on free/open-source providers (Fly.io, Railway, Vercel, etc.) see
+[`DEPLOYMENT.md`](DEPLOYMENT.md). It covers container images, Compose stacks, and CI that
+publishes to GHCR so you can deploy without running services locally.
+
 ## License
 
 Proprietary - Synaptica.ai

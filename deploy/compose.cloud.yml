@@ -1,0 +1,240 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: synaptica
+      POSTGRES_USER: synaptica
+      POSTGRES_PASSWORD: synaptica123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - synaptica
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - synaptica
+
+  zookeeper:
+    image: bitnami/zookeeper:3.9
+    restart: unless-stopped
+    environment:
+      ALLOW_ANONYMOUS_LOGIN: "yes"
+    networks:
+      - synaptica
+
+  kafka:
+    image: bitnami/kafka:3.6
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+    networks:
+      - synaptica
+
+  api-gateway:
+    build:
+      context: ..
+      dockerfile: infra/docker/go.Dockerfile
+      args:
+        SERVICE_PATH: api-gateway
+    depends_on:
+      - ingestion-service
+      - redis
+    environment:
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: "8080"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: synaptica
+      POSTGRES_PASSWORD: synaptica123
+      POSTGRES_DB: synaptica
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      KAFKA_BROKERS: kafka:9092
+      INGESTION_BASE_URL: http://ingestion-service:8081
+    ports:
+      - "8080:8080"
+    networks:
+      - synaptica
+
+  ingestion-service:
+    build:
+      context: ..
+      dockerfile: infra/docker/go.Dockerfile
+      args:
+        SERVICE_PATH: ingestion-service
+    depends_on:
+      - postgres
+      - kafka
+    environment:
+      SERVER_HOST: 0.0.0.0
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: synaptica
+      POSTGRES_PASSWORD: synaptica123
+      POSTGRES_DB: synaptica
+      KAFKA_BROKERS: kafka:9092
+      INGESTION_KAFKA_TOPIC: upstream-events
+      INGESTION_DLQ_TOPIC: upstream-events-dlq
+    networks:
+      - synaptica
+
+  dlp-service:
+    build:
+      context: ..
+      dockerfile: infra/docker/go.Dockerfile
+      args:
+        SERVICE_PATH: dlp-service
+    depends_on:
+      - kafka
+    environment:
+      SERVER_HOST: 0.0.0.0
+      KAFKA_BROKERS: kafka:9092
+      LINKAGE_KAFKA_TOPIC: linked-events
+      DLP_RULES_PATH: /app/configs/dlp_rules.yaml
+    volumes:
+      - ../configs/dlp_rules.yaml:/app/configs/dlp_rules.yaml:ro
+    networks:
+      - synaptica
+
+  deid-service:
+    build:
+      context: ..
+      dockerfile: infra/docker/go.Dockerfile
+      args:
+        SERVICE_PATH: deid-service
+    depends_on:
+      - postgres
+      - kafka
+    environment:
+      SERVER_HOST: 0.0.0.0
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: synaptica
+      POSTGRES_PASSWORD: synaptica123
+      POSTGRES_DB: synaptica
+      KAFKA_BROKERS: kafka:9092
+    networks:
+      - synaptica
+
+  normalizer-service:
+    build:
+      context: ..
+      dockerfile: infra/docker/go.Dockerfile
+      args:
+        SERVICE_PATH: normalizer-service
+    depends_on:
+      - postgres
+      - kafka
+    environment:
+      SERVER_HOST: 0.0.0.0
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: synaptica
+      POSTGRES_PASSWORD: synaptica123
+      POSTGRES_DB: synaptica
+      KAFKA_BROKERS: kafka:9092
+      TERMINOLOGY_CATALOG_PATH: /app/configs/terminology.yaml
+    volumes:
+      - ../configs/terminology.yaml:/app/configs/terminology.yaml:ro
+    networks:
+      - synaptica
+
+  linkage-service:
+    build:
+      context: ..
+      dockerfile: infra/docker/go.Dockerfile
+      args:
+        SERVICE_PATH: linkage-service
+    depends_on:
+      - postgres
+      - kafka
+    environment:
+      SERVER_HOST: 0.0.0.0
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: synaptica
+      POSTGRES_PASSWORD: synaptica123
+      POSTGRES_DB: synaptica
+      KAFKA_BROKERS: kafka:9092
+    networks:
+      - synaptica
+
+  storage-service:
+    build:
+      context: ..
+      dockerfile: infra/docker/go.Dockerfile
+      args:
+        SERVICE_PATH: storage-service
+    depends_on:
+      - postgres
+      - kafka
+      - redis
+    environment:
+      SERVER_HOST: 0.0.0.0
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: synaptica
+      POSTGRES_PASSWORD: synaptica123
+      POSTGRES_DB: synaptica
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      KAFKA_BROKERS: kafka:9092
+    networks:
+      - synaptica
+
+  training-service:
+    build:
+      context: ..
+      dockerfile: infra/docker/go.Dockerfile
+      args:
+        SERVICE_PATH: training-service
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      SERVER_HOST: 0.0.0.0
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: synaptica
+      POSTGRES_PASSWORD: synaptica123
+      POSTGRES_DB: synaptica
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      TRAINING_ARTIFACT_DIR: /data/artifacts
+    volumes:
+      - training_artifacts:/data/artifacts
+    networks:
+      - synaptica
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    environment:
+      NEXT_PUBLIC_API_BASE: http://api-gateway:8080
+    depends_on:
+      - api-gateway
+    ports:
+      - "3000:3000"
+    networks:
+      - synaptica
+
+volumes:
+  postgres_data:
+  training_artifacts:
+
+networks:
+  synaptica:
+    driver: bridge
