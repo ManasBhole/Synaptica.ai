@@ -10,54 +10,88 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/synaptica-ai/platform/pkg/common/config"
+	"github.com/synaptica-ai/platform/pkg/common/database"
 	"github.com/synaptica-ai/platform/pkg/common/kafka"
 	"github.com/synaptica-ai/platform/pkg/common/logger"
 	"github.com/synaptica-ai/platform/pkg/common/models"
+	"github.com/synaptica-ai/platform/pkg/normalizer"
+	"github.com/synaptica-ai/platform/pkg/terminology"
 )
 
-type NormalizerService struct {
+type NormalizerApp struct {
+	service  *normalizer.Service
 	producer *kafka.Producer
 	consumer *kafka.Consumer
-	// Code mappings (SNOMED, LOINC, ICD)
-	codeMappings map[string]map[string]string
 }
 
 func main() {
 	logger.Init()
 	cfg := config.Load()
 
-	service := &NormalizerService{
-		codeMappings: loadCodeMappings(),
+	catalog, err := terminology.Load(cfg.TerminologyCatalogPath)
+	if err != nil {
+		logger.Log.WithError(err).Warn("failed to load terminology catalog, using defaults")
+		catalog = terminology.DefaultCatalog()
 	}
 
-	// Kafka producer
-	service.producer = kafka.NewProducer("normalized-events")
-	defer service.producer.Close()
+	db, err := database.GetPostgres()
+	if err != nil {
+		logger.Log.WithError(err).Fatal("failed to connect to postgres")
+	}
 
-	// Kafka consumer
-	service.consumer = kafka.NewConsumer("deidentified-events", "normalizer-service")
-	defer service.consumer.Close()
+	repo := normalizer.NewRepository(db)
+	if err := repo.AutoMigrate(); err != nil {
+		logger.Log.WithError(err).Fatal("failed to migrate normalized records table")
+	}
+
+	transformer := normalizer.NewTransformer(catalog, cfg.NormalizerAllowedResources)
+
+	producer := kafka.NewProducer(cfg.NormalizerOutputTopic)
+	defer producer.Close()
+
+	var dlq *kafka.Producer
+	if cfg.NormalizerDLQTopic != "" {
+		dlq = kafka.NewProducer(cfg.NormalizerDLQTopic)
+		defer dlq.Close()
+	}
+
+	service := normalizer.NewService(transformer, repo, producer, dlq, cfg.NormalizerOutputTopic)
+
+	app := &NormalizerApp{service: service}
+	app.producer = producer
+	app.consumer = kafka.NewConsumer("deidentified-events", "normalizer-service")
+	defer app.consumer.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	go func() {
-		if err := service.consumer.Consume(ctx, service.processEvent); err != nil {
-			logger.Log.WithError(err).Fatal("Consumer error")
+		if err := app.consumer.Consume(ctx, app.handleEvent); err != nil {
+			logger.Log.WithError(err).Fatal("consumer error")
 		}
 	}()
 
-	// HTTP server
 	router := mux.NewRouter()
-	router.HandleFunc("/health", healthCheck).Methods("GET")
-	router.HandleFunc("/api/v1/normalize", service.handleNormalize).Methods("POST")
+	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"healthy"}`))
+	}).Methods(http.MethodGet)
+
+	router.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ready"}`))
+	}).Methods(http.MethodGet)
+
+	router.HandleFunc("/api/v1/normalize", app.handleNormalize).Methods(http.MethodPost)
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf("%s:%s", cfg.ServerHost, "8084"),
-		Handler: router,
+		Addr:         fmt.Sprintf("%s:%s", cfg.ServerHost, "8084"),
+		Handler:      router,
+		ReadTimeout:  cfg.ReadTimeout,
+		WriteTimeout: cfg.WriteTimeout,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	go func() {
@@ -67,7 +101,7 @@ func main() {
 		}).Info("Normalizer Service started")
 
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Log.WithError(err).Fatal("Failed to start server")
+			logger.Log.WithError(err).Fatal("failed to start server")
 		}
 	}()
 
@@ -82,130 +116,33 @@ func main() {
 	defer cancelShutdown()
 
 	if err := server.Shutdown(ctxShutdown); err != nil {
-		logger.Log.WithError(err).Error("Server forced to shutdown")
+		logger.Log.WithError(err).Error("server forced to shutdown")
 	}
 
 	logger.Log.Info("Normalizer Service stopped")
 }
 
-func healthCheck(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"healthy"}`))
+func (a *NormalizerApp) handleEvent(ctx context.Context, event models.Event) error {
+	_, err := a.service.Process(ctx, event)
+	return err
 }
 
-func (s *NormalizerService) processEvent(ctx context.Context, event models.Event) error {
-	logger.Log.WithFields(map[string]interface{}{
-		"event_id": event.ID,
-	}).Info("Processing event for normalization")
-
-	// Extract tokenized data
-	tokenizedData, ok := event.Data["tokenized_data"].(map[string]interface{})
-	if !ok {
-		logger.Log.Warn("No tokenized data found in event")
-		return nil
-	}
-
-	// Normalize to canonical FHIR format
-	normalized := s.normalizeToFHIR(tokenizedData)
-
-	// Publish normalized event
-	return s.producer.PublishEvent(ctx, "normalize", "normalizer-service", map[string]interface{}{
-		"original_event_id": event.Data["original_event_id"],
-		"normalized":        normalized,
-	})
-}
-
-func (s *NormalizerService) handleNormalize(w http.ResponseWriter, r *http.Request) {
+func (a *NormalizerApp) handleNormalize(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Data map[string]interface{} `json:"data"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
 
-	normalized := s.normalizeToFHIR(req.Data)
+	record, err := a.service.TransformOnly(req.Data)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(normalized)
+	json.NewEncoder(w).Encode(record)
 }
-
-func (s *NormalizerService) normalizeToFHIR(data map[string]interface{}) models.NormalizedRecord {
-	// Convert to canonical FHIR format
-	// This is a simplified version - in production, would have full FHIR mapping logic
-
-	record := models.NormalizedRecord{
-		ID:          uuid.New().String(),
-		PatientID:   extractPatientID(data),
-		ResourceType: extractResourceType(data),
-		Canonical:   make(map[string]interface{}),
-		Codes:       make(map[string]string),
-		Timestamp:   time.Now(),
-	}
-
-	// Map fields to canonical FHIR structure
-	for key, value := range data {
-		// Map common fields
-		switch key {
-		case "observation", "lab_result", "vital":
-			record.Canonical["resourceType"] = "Observation"
-			record.Canonical["value"] = value
-		case "condition", "diagnosis":
-			record.Canonical["resourceType"] = "Condition"
-			record.Canonical["code"] = value
-		case "procedure":
-			record.Canonical["resourceType"] = "Procedure"
-			record.Canonical["code"] = value
-		}
-	}
-
-	// Map codes (SNOMED, LOINC, ICD)
-	if code, ok := data["code"].(string); ok {
-		record.Codes["SNOMED"] = s.mapCode(code, "SNOMED")
-		record.Codes["LOINC"] = s.mapCode(code, "LOINC")
-		record.Codes["ICD"] = s.mapCode(code, "ICD")
-	}
-
-	return record
-}
-
-func extractPatientID(data map[string]interface{}) string {
-	if id, ok := data["patient_id"].(string); ok {
-		return id
-	}
-	return uuid.New().String()
-}
-
-func extractResourceType(data map[string]interface{}) string {
-	if rt, ok := data["resource_type"].(string); ok {
-		return rt
-	}
-	return "Observation" // Default
-}
-
-func (s *NormalizerService) mapCode(code, system string) string {
-	// Code mapping logic - simplified
-	if mappings, ok := s.codeMappings[system]; ok {
-		if mapped, ok := mappings[code]; ok {
-			return mapped
-		}
-	}
-	return code
-}
-
-func loadCodeMappings() map[string]map[string]string {
-	// In production, load from database or external service
-	return map[string]map[string]string{
-		"SNOMED": {
-			"example": "123456789",
-		},
-		"LOINC": {
-			"example": "12345-6",
-		},
-		"ICD": {
-			"example": "E11.9",
-		},
-	}
-}
-

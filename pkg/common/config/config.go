@@ -68,6 +68,12 @@ type Config struct {
 	// DLP / De-ID
 	DLPRulesPath  string
 	DeIDTokenSalt string
+
+	// Normalizer / Terminology
+	TerminologyCatalogPath     string
+	NormalizerOutputTopic      string
+	NormalizerDLQTopic         string
+	NormalizerAllowedResources []string
 }
 
 func Load() *Config {
@@ -121,6 +127,11 @@ func Load() *Config {
 
 		DLPRulesPath:  getEnv("DLP_RULES_PATH", "configs/dlp_rules.yaml"),
 		DeIDTokenSalt: getEnv("DEID_TOKEN_SALT", "synaptica-salt"),
+
+		TerminologyCatalogPath:     getEnv("TERMINOLOGY_CATALOG_PATH", "configs/terminology.yaml"),
+		NormalizerOutputTopic:      getEnv("NORMALIZER_KAFKA_TOPIC", "normalized-events"),
+		NormalizerDLQTopic:         getEnv("NORMALIZER_DLQ_TOPIC", "normalized-events-dlq"),
+		NormalizerAllowedResources: getStringSliceEnv("NORMALIZER_ALLOWED_RESOURCES", []string{"observation", "condition", "procedure"}),
 	}
 }
 

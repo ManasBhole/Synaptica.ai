@@ -1,0 +1,21 @@
+concepts:
+  blood-glucose:
+    display: Blood Glucose
+    snomed: "271062007"
+    loinc: "2339-0"
+    icd10: "R73.9"
+  blood-pressure:
+    display: Blood Pressure
+    snomed: "75367002"
+    loinc: "85354-9"
+    icd10: "I10"
+  heart-rate:
+    display: Heart rate
+    snomed: "364075005"
+    loinc: "8867-4"
+    icd10: "R00.8"
+  diagnosis-diabetes:
+    display: Type 2 diabetes mellitus
+    snomed: "44054006"
+    loinc: ""
+    icd10: "E11.9"

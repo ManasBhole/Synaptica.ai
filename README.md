@@ -125,6 +125,7 @@ docker-compose up -d
 # Apply database schema and seed data
 psql postgresql://synaptica:synaptica123@localhost:5432/synaptica -f db/schema.sql
 psql postgresql://synaptica:synaptica123@localhost:5432/synaptica -f db/seed/ingestion_requests.sql
+psql postgresql://synaptica:synaptica123@localhost:5432/synaptica -f db/seed/normalized_records.sql
 
 # Run services (each in separate terminal)
 cd cmd/api-gateway && go run main.go
@@ -145,6 +146,9 @@ Key variables for production hardening:
 - `INGESTION_STATUS_TTL`: retention window for ingestion audit records (default 7 days)
 - `DLP_RULES_PATH`: YAML file listing PHI patterns (`configs/dlp_rules.yaml`)
 - `DEID_TOKEN_SALT`: salt used for hashing tokens stored in the vault (change per environment)
+- `TERMINOLOGY_CATALOG_PATH`: YAML vocabulary for SNOMED/LOINC/ICD mappings (`configs/terminology.yaml`)
+- `NORMALIZER_KAFKA_TOPIC` / `NORMALIZER_DLQ_TOPIC`
+- `NORMALIZER_ALLOWED_RESOURCES`: resource types transformer will accept
 
 ### Development
 
