@@ -34,11 +34,7 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
   api-gateway:
-    build:
-      context: ..
-      dockerfile: infra/docker/go.Dockerfile
-      args:
-        SERVICE_PATH: api-gateway
+    image: ghcr.io/manasbhole/synaptica.ai/api-gateway:latest
     depends_on:
       - ingestion-service
       - redis
@@ -60,11 +56,7 @@ services:
       - synaptica
 
   ingestion-service:
-    build:
-      context: ..
-      dockerfile: infra/docker/go.Dockerfile
-      args:
-        SERVICE_PATH: ingestion-service
+    image: ghcr.io/manasbhole/synaptica.ai/ingestion-service:latest
     depends_on:
       - postgres
       - kafka
@@ -82,11 +74,7 @@ services:
       - synaptica
 
   dlp-service:
-    build:
-      context: ..
-      dockerfile: infra/docker/go.Dockerfile
-      args:
-        SERVICE_PATH: dlp-service
+    image: ghcr.io/manasbhole/synaptica.ai/dlp-service:latest
     depends_on:
       - kafka
     environment:
@@ -100,11 +88,7 @@ services:
       - synaptica
 
   deid-service:
-    build:
-      context: ..
-      dockerfile: infra/docker/go.Dockerfile
-      args:
-        SERVICE_PATH: deid-service
+    image: ghcr.io/manasbhole/synaptica.ai/deid-service:latest
     depends_on:
       - postgres
       - kafka
@@ -120,11 +104,7 @@ services:
       - synaptica
 
   normalizer-service:
-    build:
-      context: ..
-      dockerfile: infra/docker/go.Dockerfile
-      args:
-        SERVICE_PATH: normalizer-service
+    image: ghcr.io/manasbhole/synaptica.ai/normalizer-service:latest
     depends_on:
       - postgres
       - kafka
@@ -143,11 +123,7 @@ services:
       - synaptica
 
   linkage-service:
-    build:
-      context: ..
-      dockerfile: infra/docker/go.Dockerfile
-      args:
-        SERVICE_PATH: linkage-service
+    image: ghcr.io/manasbhole/synaptica.ai/linkage-service:latest
     depends_on:
       - postgres
       - kafka
@@ -163,11 +139,7 @@ services:
       - synaptica
 
   storage-service:
-    build:
-      context: ..
-      dockerfile: infra/docker/go.Dockerfile
-      args:
-        SERVICE_PATH: storage-service
+    image: ghcr.io/manasbhole/synaptica.ai/storage-service:latest
     depends_on:
       - postgres
       - kafka
@@ -186,11 +158,7 @@ services:
       - synaptica
 
   training-service:
-    build:
-      context: ..
-      dockerfile: infra/docker/go.Dockerfile
-      args:
-        SERVICE_PATH: training-service
+    image: ghcr.io/manasbhole/synaptica.ai/training-service:latest
     depends_on:
       - postgres
       - redis
@@ -210,9 +178,7 @@ services:
       - synaptica
 
   frontend:
-    build:
-      context: ../frontend
-      dockerfile: Dockerfile
+    image: ghcr.io/manasbhole/synaptica.ai/frontend:latest
     environment:
       NEXT_PUBLIC_API_BASE: http://api-gateway:8080
     depends_on:
