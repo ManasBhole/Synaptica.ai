@@ -20,7 +20,7 @@ services:
       - synaptica
 
   zookeeper:
-    image: bitnami/zookeeper:3.9
+    image: bitnami/zookeeper:3.8.3-debian-11-r72
     restart: unless-stopped
     environment:
       ALLOW_ANONYMOUS_LOGIN: "yes"
@@ -28,7 +28,7 @@ services:
       - synaptica
 
   kafka:
-    image: bitnami/kafka:3.6
+    image: bitnami/kafka:3.6.2-debian-11-r16
     restart: unless-stopped
     depends_on:
       - zookeeper
