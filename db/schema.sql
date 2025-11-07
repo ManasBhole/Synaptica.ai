@@ -57,6 +57,24 @@ CREATE TABLE IF NOT EXISTS feature_offline_store (
 
 CREATE INDEX IF NOT EXISTS idx_feature_patient ON feature_offline_store(patient_id);
 
+CREATE TABLE IF NOT EXISTS training_jobs (
+    id UUID PRIMARY KEY,
+    model_type TEXT NOT NULL,
+    config JSONB,
+    filters JSONB,
+    status TEXT NOT NULL,
+    metrics JSONB,
+    artifact_path TEXT,
+    error_message TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_training_jobs_status ON training_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_training_jobs_model ON training_jobs(model_type);
+
 CREATE TABLE IF NOT EXISTS master_patients (
     id UUID PRIMARY KEY,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

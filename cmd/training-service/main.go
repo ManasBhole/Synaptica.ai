@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -15,13 +16,12 @@ import (
 	"github.com/synaptica-ai/platform/pkg/common/config"
 	"github.com/synaptica-ai/platform/pkg/common/database"
 	"github.com/synaptica-ai/platform/pkg/common/logger"
-	"github.com/synaptica-ai/platform/pkg/common/models"
 	"github.com/synaptica-ai/platform/pkg/storage"
+	"github.com/synaptica-ai/platform/pkg/training"
 )
 
-type TrainingService struct {
-	lakehouse    *storage.LakehouseWriter
-	featureStore *storage.FeatureStore
+type TrainingApp struct {
+	service *training.Service
 }
 
 func main() {
@@ -31,6 +31,11 @@ func main() {
 	db, err := database.GetPostgres()
 	if err != nil {
 		logger.Log.WithError(err).Fatal("Failed to connect to database")
+	}
+
+	repo := training.NewRepository(db)
+	if err := repo.AutoMigrate(); err != nil {
+		logger.Log.WithError(err).Fatal("Failed to migrate training tables")
 	}
 
 	lakehouse := storage.NewLakehouseWriter(db)
@@ -44,20 +49,33 @@ func main() {
 		logger.Log.WithError(err).Fatal("Failed to migrate feature store tables")
 	}
 
-	service := &TrainingService{
-		lakehouse:    lakehouse,
-		featureStore: featureStore,
+	service, err := training.NewService(repo, lakehouse, featureStore, cfg.TrainingArtifactDir, cfg.TrainingMaxWorkers, cfg.TrainingSimulationDelay)
+	if err != nil {
+		logger.Log.WithError(err).Fatal("Failed to initialize training service")
 	}
 
+	app := &TrainingApp{service: service}
+
 	router := mux.NewRouter()
-	router.HandleFunc("/health", healthCheck).Methods("GET")
-	router.HandleFunc("/api/v1/training/jobs", service.handleCreateJob).Methods("POST")
-	router.HandleFunc("/api/v1/training/jobs/{id}", service.handleGetJob).Methods("GET")
-	router.HandleFunc("/api/v1/training/jobs/{id}/status", service.handleGetStatus).Methods("GET")
+	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"healthy"}`))
+	}).Methods(http.MethodGet)
+	router.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ready"}`))
+	}).Methods(http.MethodGet)
+	router.HandleFunc("/api/v1/training/jobs", app.handleCreateJob).Methods(http.MethodPost)
+	router.HandleFunc("/api/v1/training/jobs", app.handleListJobs).Methods(http.MethodGet)
+	router.HandleFunc("/api/v1/training/jobs/{id}", app.handleGetJob).Methods(http.MethodGet)
+	router.HandleFunc("/api/v1/training/jobs/{id}/status", app.handleGetJob).Methods(http.MethodGet)
+	router.HandleFunc("/api/v1/training/jobs/{id}/artifact", app.handleArtifact).Methods(http.MethodGet)
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf("%s:%s", cfg.ServerHost, "8088"),
-		Handler: router,
+		Addr:         fmt.Sprintf("%s:%s", cfg.ServerHost, "8088"),
+		Handler:      router,
+		ReadTimeout:  cfg.ReadTimeout,
+		WriteTimeout: cfg.WriteTimeout,
 	}
 
 	go func() {
@@ -87,101 +105,108 @@ func main() {
 	logger.Log.Info("Training Service stopped")
 }
 
-func healthCheck(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"healthy"}`))
-}
-
-func (s *TrainingService) handleCreateJob(w http.ResponseWriter, r *http.Request) {
+func (a *TrainingApp) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ModelType string                 `json:"model_type"`
 		Config    map[string]interface{} `json:"config"`
+		Filters   map[string]interface{} `json:"filters"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	if req.ModelType == "" {
+		http.Error(w, "model_type is required", http.StatusBadRequest)
 		return
 	}
 
-	job := models.TrainingJob{
-		ID:        uuid.New(),
+	job, err := a.service.Create(r.Context(), training.CreateJobInput{
 		ModelType: req.ModelType,
 		Config:    req.Config,
-		Status:    "queued",
-		CreatedAt: time.Now(),
-	}
-
-	// Start training in background
-	go s.trainModel(context.Background(), job)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(job)
-}
-
-func (s *TrainingService) handleGetJob(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
-
-	// In production, would fetch from database
-	job := models.TrainingJob{
-		ID:        uuid.MustParse(id),
-		Status:    "completed",
-		CreatedAt: time.Now(),
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(job)
-}
-
-func (s *TrainingService) handleGetStatus(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
-
-	// In production, would fetch from database
-	status := map[string]interface{}{
-		"job_id":   id,
-		"status":   "completed",
-		"progress": 100,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(status)
-}
-
-func (s *TrainingService) trainModel(ctx context.Context, job models.TrainingJob) {
-	logger.Log.WithFields(map[string]interface{}{
-		"job_id":     job.ID,
-		"model_type": job.ModelType,
-	}).Info("Starting model training")
-
-	// Get training data from Lakehouse
-	trainingData, err := s.lakehouse.GetTrainingData(ctx, job.Config)
+		Filters:   req.Filters,
+	})
 	if err != nil {
-		logger.Log.WithError(err).Error("Failed to get training data")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Get feature views from Feature Store
-	featureNames := []string{} // Extract from config
-	featureViews, err := s.featureStore.GetFeatureViews(ctx, featureNames)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(job)
+}
+
+func (a *TrainingApp) handleGetJob(w http.ResponseWriter, r *http.Request) {
+	jobID, err := parseJobID(r)
 	if err != nil {
-		logger.Log.WithError(err).Error("Failed to get feature views")
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	logger.Log.WithFields(map[string]interface{}{
-		"training_samples": len(trainingData),
-		"feature_views":    len(featureViews),
-	}).Info("Training data prepared")
+	job, err := a.service.Get(r.Context(), jobID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
 
-	// In production, would:
-	// 1. Prepare features
-	// 2. Split train/validation/test
-	// 3. Train model (TensorFlow, PyTorch, AutoML)
-	// 4. Evaluate model
-	// 5. Save model artifacts
-	// 6. Update job status
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(job)
+}
 
-	logger.Log.WithField("job_id", job.ID).Info("Model training completed")
+func (a *TrainingApp) handleListJobs(w http.ResponseWriter, r *http.Request) {
+	limit := 50
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil {
+			limit = parsed
+		}
+	}
+
+	jobs, err := a.service.List(r.Context(), limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"jobs": jobs})
+}
+
+func (a *TrainingApp) handleArtifact(w http.ResponseWriter, r *http.Request) {
+	jobID, err := parseJobID(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	artifact, err := a.service.GetArtifact(jobID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	if artifact.Path == "" {
+		http.Error(w, "artifact not available yet", http.StatusNotFound)
+		return
+	}
+
+	content, err := os.ReadFile(artifact.Path)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(content)
+}
+
+func parseJobID(r *http.Request) (uuid.UUID, error) {
+	id := mux.Vars(r)["id"]
+	if id == "" {
+		return uuid.Nil, fmt.Errorf("missing job id")
+	}
+	jobID, err := uuid.Parse(id)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("invalid job id")
+	}
+	return jobID, nil
 }

@@ -88,6 +88,11 @@ type Config struct {
 	FeatureOnlinePrefix    string
 	FeatureMaterializeCron string
 	FeatureCacheTTL        time.Duration
+
+	// Training / ML
+	TrainingArtifactDir     string
+	TrainingMaxWorkers      int
+	TrainingSimulationDelay time.Duration
 }
 
 func Load() *Config {
@@ -158,6 +163,10 @@ func Load() *Config {
 		FeatureOnlinePrefix:    getEnv("FEATURE_ONLINE_PREFIX", "feature:"),
 		FeatureMaterializeCron: getEnv("FEATURE_MATERIALIZE_CRON", "@every 1m"),
 		FeatureCacheTTL:        getDuration("FEATURE_CACHE_TTL", 5*time.Minute),
+
+		TrainingArtifactDir:     getEnv("TRAINING_ARTIFACT_DIR", "artifacts/training"),
+		TrainingMaxWorkers:      getIntEnv("TRAINING_MAX_WORKERS", 2),
+		TrainingSimulationDelay: getDuration("TRAINING_SIMULATION_DELAY", 5*time.Second),
 	}
 }
 

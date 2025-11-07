@@ -108,6 +108,9 @@ flowchart LR
 - `FEATURE_OFFLINE_TABLE`, `FEATURE_ONLINE_PREFIX`
 - `FEATURE_MATERIALIZE_CRON`: cadence for future background jobs (currently manual)
 - `FEATURE_CACHE_TTL`: TTL for Redis hot features (default 5m)
+- `TRAINING_ARTIFACT_DIR`: directory where simulated model artifacts are written (`artifacts/training`)
+- `TRAINING_MAX_WORKERS`: concurrent training jobs (default 2)
+- `TRAINING_SIMULATION_DELAY`: duration to simulate training work (default 5s)
 - **Databases**: PostgreSQL (OLTP), ClickHouse (RT OLAP), Redis (Cache)
 - **Message Queue**: Kafka
 - **API Gateway**: Custom implementation with OIDC/mTLS
@@ -133,6 +136,7 @@ psql postgresql://synaptica:synaptica123@localhost:5432/synaptica -f db/seed/ing
 psql postgresql://synaptica:synaptica123@localhost:5432/synaptica -f db/seed/normalized_records.sql
 psql postgresql://synaptica:synaptica123@localhost:5432/synaptica -f db/seed/patient_linkages.sql
 psql postgresql://synaptica:synaptica123@localhost:5432/synaptica -f db/seed/storage_facts.sql
+psql postgresql://synaptica:synaptica123@localhost:5432/synaptica -f db/seed/training_jobs.sql
 
 # Run services (each in separate terminal)
 cd cmd/api-gateway && go run main.go
