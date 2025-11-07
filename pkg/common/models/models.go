@@ -8,12 +8,12 @@ import (
 
 // Upstream data models
 type IngestRequest struct {
-	Source      string                 `json:"source"`       // hospital, lab, imaging, wearable, telehealth
-	Format      string                 `json:"format"`        // FHIR, HL7, ABDM, CSV, DICOM, JSON
-	Data        map[string]interface{} `json:"data"`
-	PatientID   string                 `json:"patient_id,omitempty"`
-	Timestamp   time.Time              `json:"timestamp"`
-	Metadata    map[string]string      `json:"metadata,omitempty"`
+	Source    string                 `json:"source"` // hospital, lab, imaging, wearable, telehealth
+	Format    string                 `json:"format"` // FHIR, HL7, ABDM, CSV, DICOM, JSON
+	Data      map[string]interface{} `json:"data"`
+	PatientID string                 `json:"patient_id,omitempty"`
+	Timestamp time.Time              `json:"timestamp"`
+	Metadata  map[string]string      `json:"metadata,omitempty"`
 }
 
 type IngestResponse struct {
@@ -34,11 +34,11 @@ type Event struct {
 
 // DLP & PHI Detection
 type PHIDetectionResult struct {
-	Detected    bool              `json:"detected"`
-	Confidence  float64           `json:"confidence"`
-	PHITypes    []string          `json:"phi_types"` // SSN, DOB, Name, Address, etc.
-	Positions   []PHIPosition     `json:"positions"`
-	Suggestions []string          `json:"suggestions,omitempty"`
+	Detected    bool          `json:"detected"`
+	Confidence  float64       `json:"confidence"`
+	PHITypes    []string      `json:"phi_types"` // SSN, DOB, Name, Address, etc.
+	Positions   []PHIPosition `json:"positions"`
+	Suggestions []string      `json:"suggestions,omitempty"`
 }
 
 type PHIPosition struct {
@@ -50,25 +50,25 @@ type PHIPosition struct {
 
 // De-Identification
 type DeIDRequest struct {
-	Data        map[string]interface{} `json:"data"`
-	PHIResults  PHIDetectionResult      `json:"phi_results"`
-	Retention   string                  `json:"retention,omitempty"` // k-anonymity, l-diversity
+	Data       map[string]interface{} `json:"data"`
+	PHIResults PHIDetectionResult     `json:"phi_results"`
+	Retention  string                 `json:"retention,omitempty"` // k-anonymity, l-diversity
 }
 
 type DeIDResponse struct {
-	TokenizedData map[string]interface{} `json:"tokenized_data"`
-	TokenVault    map[string]string      `json:"token_vault"` // token -> original value
-	AnonymityLevel string                `json:"anonymity_level"`
+	TokenizedData  map[string]interface{} `json:"tokenized_data"`
+	TokenVault     map[string]string      `json:"token_vault"` // token -> original value
+	AnonymityLevel string                 `json:"anonymity_level"`
 }
 
 // Schema Normalization
 type NormalizedRecord struct {
-	ID          string                 `json:"id"`
-	PatientID   string                 `json:"patient_id"`
-	ResourceType string                `json:"resource_type"` // Observation, Condition, Procedure, etc.
-	Canonical   map[string]interface{} `json:"canonical"`
-	Codes       map[string]string      `json:"codes"` // SNOMED, LOINC, ICD
-	Timestamp   time.Time              `json:"timestamp"`
+	ID           string                 `json:"id"`
+	PatientID    string                 `json:"patient_id"`
+	ResourceType string                 `json:"resource_type"` // Observation, Condition, Procedure, etc.
+	Canonical    map[string]interface{} `json:"canonical"`
+	Codes        map[string]string      `json:"codes"` // SNOMED, LOINC, ICD
+	Timestamp    time.Time              `json:"timestamp"`
 }
 
 // Record Linkage
@@ -92,10 +92,11 @@ type CohortQuery struct {
 }
 
 type CohortResult struct {
-	CohortID    string   `json:"cohort_id"`
-	PatientIDs  []string `json:"patient_ids"`
-	Count       int      `json:"count"`
-	QueryTime   time.Duration `json:"query_time"`
+	CohortID   string                 `json:"cohort_id"`
+	PatientIDs []string               `json:"patient_ids"`
+	Count      int                    `json:"count"`
+	QueryTime  time.Duration          `json:"query_time"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // Feature Store
@@ -107,26 +108,26 @@ type Feature struct {
 }
 
 type FeatureSet struct {
-	PatientID string                 `json:"patient_id"`
-	Features  map[string]Feature     `json:"features"`
-	Version   int                    `json:"version"`
+	PatientID string             `json:"patient_id"`
+	Features  map[string]Feature `json:"features"`
+	Version   int                `json:"version"`
 }
 
 // Model Training
 type TrainingJob struct {
-	ID          uuid.UUID             `json:"id"`
-	ModelType   string                `json:"model_type"`
+	ID          uuid.UUID              `json:"id"`
+	ModelType   string                 `json:"model_type"`
 	Config      map[string]interface{} `json:"config"`
-	Status      string                `json:"status"`
-	CreatedAt   time.Time             `json:"created_at"`
-	CompletedAt *time.Time            `json:"completed_at,omitempty"`
+	Status      string                 `json:"status"`
+	CreatedAt   time.Time              `json:"created_at"`
+	CompletedAt *time.Time             `json:"completed_at,omitempty"`
 }
 
 // Model Serving
 type PredictionRequest struct {
-	PatientID  string                 `json:"patient_id"`
-	Features   map[string]interface{} `json:"features"`
-	ModelName  string                 `json:"model_name"`
+	PatientID string                 `json:"patient_id"`
+	Features  map[string]interface{} `json:"features"`
+	ModelName string                 `json:"model_name"`
 }
 
 type PredictionResponse struct {
@@ -139,16 +140,15 @@ type PredictionResponse struct {
 
 // Clean Room
 type CleanRoomQuery struct {
-	ID           string                 `json:"id"`
-	Query        map[string]interface{} `json:"query"`
-	DPBudget     float64                `json:"dp_budget"` // epsilon
-	Lineage      []string               `json:"lineage"`
+	ID       string                 `json:"id"`
+	Query    map[string]interface{} `json:"query"`
+	DPBudget float64                `json:"dp_budget"` // epsilon
+	Lineage  []string               `json:"lineage"`
 }
 
 type CleanRoomResult struct {
-	QueryID     string                 `json:"query_id"`
-	Aggregates  map[string]interface{} `json:"aggregates"`
-	NoiseAdded  float64                `json:"noise_added"`
-	DPBudgetUsed float64               `json:"dp_budget_used"`
+	QueryID      string                 `json:"query_id"`
+	Aggregates   map[string]interface{} `json:"aggregates"`
+	NoiseAdded   float64                `json:"noise_added"`
+	DPBudgetUsed float64                `json:"dp_budget_used"`
 }
-

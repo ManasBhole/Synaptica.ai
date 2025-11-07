@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/synaptica-ai/platform/pkg/analytics/cohort"
 	"github.com/synaptica-ai/platform/pkg/common/config"
 	"github.com/synaptica-ai/platform/pkg/common/database"
 	"github.com/synaptica-ai/platform/pkg/common/logger"
@@ -18,10 +19,8 @@ import (
 	"github.com/synaptica-ai/platform/pkg/storage"
 )
 
-type CohortService struct {
-	lakehouse *storage.LakehouseWriter
-	rtolap    *storage.OLAPWriter
-	llmClient interface{} // LLM service client
+type CohortApp struct {
+	service *cohort.Service
 }
 
 func main() {
@@ -38,21 +37,25 @@ func main() {
 		logger.Log.WithError(err).Fatal("Failed to migrate lakehouse tables")
 	}
 
-	rtolap := storage.NewOLAPWriter(db)
-	if err := rtolap.AutoMigrate(); err != nil {
+	olapWriter := storage.NewOLAPWriter(db)
+	if err := olapWriter.AutoMigrate(); err != nil {
 		logger.Log.WithError(err).Fatal("Failed to migrate OLAP tables")
 	}
 
-	service := &CohortService{
-		lakehouse: lakehouse,
-		rtolap:    rtolap,
-	}
+	app := &CohortApp{service: cohort.NewService(lakehouse, olapWriter)}
 
 	router := mux.NewRouter()
-	router.HandleFunc("/health", healthCheck).Methods("GET")
-	router.HandleFunc("/api/v1/cohort/query", service.handleQuery).Methods("POST")
-	router.HandleFunc("/api/v1/cohort/verify", service.handleVerify).Methods("POST")
-	router.HandleFunc("/api/v1/cohort/{id}", service.handleGetCohort).Methods("GET")
+	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"healthy"}`))
+	}).Methods(http.MethodGet)
+	router.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ready"}`))
+	}).Methods(http.MethodGet)
+	router.HandleFunc("/api/v1/cohort/query", app.handleQuery).Methods(http.MethodPost)
+	router.HandleFunc("/api/v1/cohort/verify", app.handleVerify).Methods(http.MethodPost)
+	router.HandleFunc("/api/v1/cohort/{id}", app.handleGetCohort).Methods(http.MethodGet)
 
 	server := &http.Server{
 		Addr:    fmt.Sprintf("%s:%s", cfg.ServerHost, "8087"),
@@ -86,55 +89,35 @@ func main() {
 	logger.Log.Info("Cohort Service stopped")
 }
 
-func healthCheck(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"healthy"}`))
-}
-
-func (s *CohortService) handleQuery(w http.ResponseWriter, r *http.Request) {
+func (a *CohortApp) handleQuery(w http.ResponseWriter, r *http.Request) {
 	var query models.CohortQuery
-
 	if err := json.NewDecoder(r.Body).Decode(&query); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
-	// Verify DSL
-	if err := s.verifyDSL(query.DSL); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid DSL: %v", err), http.StatusBadRequest)
-		return
-	}
-
-	// Execute cohort scan on Lakehouse
 	ctx := r.Context()
-	result, err := s.lakehouse.QueryCohort(ctx, query)
+	result, err := a.service.Execute(ctx, query)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
-	}
-
-	// For sub-second slicing, query RT OLAP
-	if len(query.Filters) > 0 {
-		sliceResults, _ := s.rtolap.QuerySubSecondSlicing(ctx, query.Filters)
-		logger.Log.WithField("slice_count", len(sliceResults)).Debug("Sub-second slice query completed")
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
 }
 
-func (s *CohortService) handleVerify(w http.ResponseWriter, r *http.Request) {
+func (a *CohortApp) handleVerify(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		DSL string `json:"dsl"`
 	}
-
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
-	if err := s.verifyDSL(req.DSL); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid DSL: %v", err), http.StatusBadRequest)
+	if err := a.service.VerifyDSL(req.DSL); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -145,17 +128,10 @@ func (s *CohortService) handleVerify(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *CohortService) handleGetCohort(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
-
-	// Query cohort by ID
-	query := models.CohortQuery{
-		ID: id,
-	}
-
+func (a *CohortApp) handleGetCohort(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
 	ctx := r.Context()
-	result, err := s.lakehouse.QueryCohort(ctx, query)
+	result, err := a.service.Execute(ctx, models.CohortQuery{ID: id, DSL: fmt.Sprintf("select patient_id where id = '%s'", id)})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -163,17 +139,4 @@ func (s *CohortService) handleGetCohort(w http.ResponseWriter, r *http.Request) 
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
-}
-
-func (s *CohortService) verifyDSL(dsl string) error {
-	// DSL verifier - check syntax and semantics
-	// In production, would use proper parser/validator
-
-	if dsl == "" {
-		return fmt.Errorf("DSL cannot be empty")
-	}
-
-	// Basic validation - check for SQL injection patterns
-	// In production, would use proper DSL parser
-	return nil
 }
