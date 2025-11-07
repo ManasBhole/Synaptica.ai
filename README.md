@@ -143,6 +143,8 @@ Key variables for production hardening:
 - `GATEWAY_RATE_LIMIT_RPS` / `GATEWAY_RATE_LIMIT_BURST`: rate limiting controls
 - `GATEWAY_REQUEST_TIMEOUT`: timeout for gateway to downstream services
 - `INGESTION_STATUS_TTL`: retention window for ingestion audit records (default 7 days)
+- `DLP_RULES_PATH`: YAML file listing PHI patterns (`configs/dlp_rules.yaml`)
+- `DEID_TOKEN_SALT`: salt used for hashing tokens stored in the vault (change per environment)
 
 ### Development
 

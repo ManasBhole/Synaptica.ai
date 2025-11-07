@@ -13,3 +13,9 @@ CREATE TABLE IF NOT EXISTS ingestion_requests (
 
 CREATE INDEX IF NOT EXISTS idx_ingestion_requests_status ON ingestion_requests(status);
 CREATE INDEX IF NOT EXISTS idx_ingestion_requests_created_at ON ingestion_requests(created_at);
+
+CREATE TABLE IF NOT EXISTS deid_token_vault (
+    token TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

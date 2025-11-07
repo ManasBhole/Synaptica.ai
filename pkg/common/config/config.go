@@ -64,6 +64,10 @@ type Config struct {
 	IngestionKafkaTopic     string
 	IngestionDLQTopic       string
 	IngestionStatusTTL      time.Duration
+
+	// DLP / De-ID
+	DLPRulesPath  string
+	DeIDTokenSalt string
 }
 
 func Load() *Config {
@@ -114,6 +118,9 @@ func Load() *Config {
 		IngestionKafkaTopic:     getEnv("INGESTION_KAFKA_TOPIC", "upstream-events"),
 		IngestionDLQTopic:       getEnv("INGESTION_DLQ_TOPIC", "upstream-events-dlq"),
 		IngestionStatusTTL:      getDuration("INGESTION_STATUS_TTL", 7*24*time.Hour),
+
+		DLPRulesPath:  getEnv("DLP_RULES_PATH", "configs/dlp_rules.yaml"),
+		DeIDTokenSalt: getEnv("DEID_TOKEN_SALT", "synaptica-salt"),
 	}
 }
 
