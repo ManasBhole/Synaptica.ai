@@ -11,6 +11,79 @@ The platform consists of multiple microservices that handle:
 - **AI/Analytics**: LLM pipelines, cohort queries, model training & serving
 - **Downstream Consumption**: Clinician apps, Pharma/CRO, Insurers, Internal ops
 
+### Diagram
+
+```mermaid
+%% Synaptica.ai healthcare architecture
+flowchart LR
+
+  subgraph U[UPSTREAM PRODUCERS]
+    H(Hospitals/EHR\nFHIR/HL7/ABDM)
+    L(Labs/Diagnostics)
+    I(Imaging Systems\nDICOM/meta)
+    W(Wearables/IoT\nCGM/HR/HRV)
+    T(Telehealth/Notes)
+  end
+
+  AGW(API Gateway\nOIDC, mTLS, RLS)
+  ING(Ingestion Service\nFHIR, device JSON, file drops)
+  BUS((Event Bus\nKafka/Pub/Sub))
+  DLP(DLP & PHI Detector\nregex+NER+LLM)
+  DEID(De-ID & Token Vault\nk/l-diversity checks)
+  NORM(Schema Normalizer\nFHIR→canonical, codes)
+  LINK(Record Linkage\ndeterministic + probabilistic)
+
+  subgraph DATA[DATA PLANES]
+    LAKE[(Lakehouse\nDelta/BigQuery)]
+    CLICK[(RT OLAP\nClickHouse/Pinot)]
+    PG[(OLTP Truth\nPostgres/AlloyDB)]
+    FEAST[(Feature Store\nOffline+Online)]
+    REDIS[(Online FS Cache\nRedis)]
+  end
+
+  LLM(LLM Pipelines\nNL→Cohort, Notes NLP, Code map)
+  COHORT(Cohort/Query Engine\nDSL + verifier)
+  TRAIN(Model Training\nBatch/AutoML)
+  SERVE(Model Serving\nTriton/Vertex/TF Serving)
+  CLEAN(Clean Room\nDP ε budgets, lineage)
+
+  subgraph D[DOWNSTREAM CONSUMERS]
+    CLIN(Clinician Apps/Alerts)
+    PHAR(Pharma/CRO RWD/RWE)
+    PAY(Insurers/TPA Analytics)
+    OPS(Internal Ops & Dashboards)
+  end
+
+  H -->|"UPSTREAM ▶ FHIR/HL7, ABDM"| AGW
+  L -->|"UPSTREAM ▶ lab feeds/CSV"| AGW
+  I -->|"UPSTREAM ▶ DICOM meta"| AGW
+  W -->|"UPSTREAM ▶ device JSON/SDK"| AGW
+  T -->|"UPSTREAM ▶ notes, transcripts"| AGW
+  AGW -->|"ingest calls"| ING
+  ING -->|"UPSTREAM ▶ events"| BUS
+  BUS -->|sanitize| DLP
+  DLP -->|"UPSTREAM ▶ de-identify"| DEID
+  DEID -->|"tokenized records"| NORM
+  NORM -->|"canonical rows"| LINK
+  LINK -->|"DOWNSTREAM ▶ immutable facts"| LAKE
+  LINK -->|"DOWNSTREAM ▶ denormalized facts"| CLICK
+  LINK -->|"consents/ids"| PG
+  LAKE -->|"features build (batch)"| FEAST
+  FEAST -->|"materialize hot"| REDIS
+  LAKE -->|"NL schema/context"| LLM
+  LAKE -->|"cohort scans"| COHORT
+  CLICK -->|"sub-sec slicing"| COHORT
+  TRAIN -->|"model.artifacts"| SERVE
+  LAKE -->|"training data"| TRAIN
+  FEAST -->|"feature views"| TRAIN
+  REDIS -->|"features p95<10ms"| SERVE
+  SERVE -->|"DOWNSTREAM ▶ risk scores"| CLIN
+  COHORT -->|"DOWNSTREAM ▶ DP queries"| CLEAN
+  CLEAN -->|"aggregates only"| PHAR
+  CLEAN -->|"actuarial sets"| PAY
+  COHORT -->|"ops queries/metrics"| OPS
+```
+
 ## Services
 
 ### Core Services
