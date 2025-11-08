@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -40,6 +41,8 @@ func NewMetricsHandler(db *gorm.DB) *MetricsHandler {
 func (h *MetricsHandler) Register(r *mux.Router) {
 	r.HandleFunc("/metrics/overview", h.handleOverview).Methods(http.MethodGet)
 	r.HandleFunc("/pipelines/status", h.handlePipelineStatus).Methods(http.MethodGet)
+	r.HandleFunc("/metrics/prediction-latency", h.handlePredictionLatency).Methods(http.MethodGet)
+	r.HandleFunc("/training/jobs", h.handleTrainingJobs).Methods(http.MethodGet)
 }
 
 func (h *MetricsHandler) handleOverview(w http.ResponseWriter, r *http.Request) {
@@ -189,4 +192,117 @@ func writeJSON(w http.ResponseWriter, data interface{}) {
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		logger.Log.WithError(err).Error("failed to write json response")
 	}
+}
+
+type PredictionLatencyPoint struct {
+	Timestamp time.Time `json:"timestamp"`
+	LatencyMs float64   `json:"latencyMs"`
+}
+
+func (h *MetricsHandler) handlePredictionLatency(w http.ResponseWriter, r *http.Request) {
+	var rows []struct {
+		Timestamp time.Time       `gorm:"column:bucket"`
+		Latency   sql.NullFloat64 `gorm:"column:latency_ms"`
+	}
+
+	if err := h.db.WithContext(r.Context()).Raw(`
+		SELECT
+			date_trunc('minute', created_at) AS bucket,
+			AVG(EXTRACT(EPOCH FROM created_at - timestamp) * 1000) AS latency_ms
+		FROM lakehouse_facts
+		WHERE created_at > NOW() - INTERVAL '2 hour'
+		GROUP BY bucket
+		ORDER BY bucket ASC
+	`).Scan(&rows).Error; err != nil {
+		logger.Log.WithError(err).Error("failed to load prediction latency")
+		http.Error(w, "failed to load prediction latency", http.StatusInternalServerError)
+		return
+	}
+
+	points := make([]PredictionLatencyPoint, 0, len(rows))
+	for _, row := range rows {
+		latency := 0.0
+		if row.Latency.Valid {
+			latency = row.Latency.Float64
+		}
+		points = append(points, PredictionLatencyPoint{
+			Timestamp: row.Timestamp,
+			LatencyMs: latency,
+		})
+	}
+
+	writeJSON(w, points)
+}
+
+type TrainingJobSummary struct {
+	ID          string     `json:"id"`
+	ModelType   string     `json:"modelType"`
+	Status      string     `json:"status"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	CompletedAt *time.Time `json:"completedAt,omitempty"`
+	Accuracy    *float64   `json:"accuracy,omitempty"`
+	Loss        *float64   `json:"loss,omitempty"`
+}
+
+func (h *MetricsHandler) handleTrainingJobs(w http.ResponseWriter, r *http.Request) {
+	limit := 10
+	if val := r.URL.Query().Get("limit"); val != "" {
+		if parsed, err := strconv.Atoi(val); err == nil && parsed > 0 && parsed <= 50 {
+			limit = parsed
+		}
+	}
+
+	var rows []struct {
+		ID          string          `gorm:"column:id"`
+		ModelType   string          `gorm:"column:model_type"`
+		Status      string          `gorm:"column:status"`
+		CreatedAt   time.Time       `gorm:"column:created_at"`
+		CompletedAt *time.Time      `gorm:"column:completed_at"`
+		Accuracy    sql.NullFloat64 `gorm:"column:accuracy"`
+		Loss        sql.NullFloat64 `gorm:"column:loss"`
+	}
+
+	if err := h.db.WithContext(r.Context()).Raw(`
+		SELECT
+			id,
+			model_type,
+			status,
+			created_at,
+			completed_at,
+			NULLIF((metrics ->> 'accuracy'), '')::DOUBLE PRECISION AS accuracy,
+			NULLIF((metrics ->> 'loss'), '')::DOUBLE PRECISION AS loss
+		FROM training_jobs
+		ORDER BY created_at DESC
+		LIMIT ?
+	`, limit).Scan(&rows).Error; err != nil {
+		logger.Log.WithError(err).Error("failed to list training jobs")
+		http.Error(w, "failed to list training jobs", http.StatusInternalServerError)
+		return
+	}
+
+	jobs := make([]TrainingJobSummary, 0, len(rows))
+	for _, row := range rows {
+		var accPtr *float64
+		if row.Accuracy.Valid {
+			v := row.Accuracy.Float64
+			accPtr = &v
+		}
+		var lossPtr *float64
+		if row.Loss.Valid {
+			v := row.Loss.Float64
+			lossPtr = &v
+		}
+
+		jobs = append(jobs, TrainingJobSummary{
+			ID:          row.ID,
+			ModelType:   row.ModelType,
+			Status:      row.Status,
+			CreatedAt:   row.CreatedAt,
+			CompletedAt: row.CompletedAt,
+			Accuracy:    accPtr,
+			Loss:        lossPtr,
+		})
+	}
+
+	writeJSON(w, map[string]interface{}{"jobs": jobs})
 }

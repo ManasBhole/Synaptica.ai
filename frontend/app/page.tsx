@@ -3,7 +3,14 @@
 import { MetricCard } from "../components/metric-card";
 import { Sparkline } from "../components/sparkline";
 import { EventTimeline } from "../components/event-timeline";
-import { usePredictionLatency, usePipelineStatuses, useSystemMetrics, useTrainingJobs } from "../hooks/useSystemMetrics";
+import { AlertFeed } from "../components/alert-feed";
+import {
+  usePredictionLatency,
+  usePipelineStatuses,
+  useSystemMetrics,
+  useTrainingJobs,
+  useAlerts
+} from "../hooks/useSystemMetrics";
 import { Suspense } from "react";
 
 const OverviewContent = () => {
@@ -11,6 +18,7 @@ const OverviewContent = () => {
   const { data: latency } = usePredictionLatency();
   const { data: pipelines } = usePipelineStatuses();
   const { data: jobs } = useTrainingJobs();
+  const { data: alerts } = useAlerts();
 
   return (
     <div className="space-y-8">
@@ -62,15 +70,18 @@ const OverviewContent = () => {
             ))}
           </div>
         </div>
-        <EventTimeline
-          events={jobs.slice(0, 4).map((job) => ({
-            id: job.id,
-            title: `${job.modelType} • ${job.status}`,
-            description: job.completedAt ? `Accuracy ${(job.accuracy ?? 0.0 * 100).toFixed(1)}%` : "Training in progress",
-            timestamp: new Date(job.createdAt).toLocaleString(),
-            status: job.status === "completed" ? "success" : job.status === "running" ? "info" : "warning"
-          }))}
-        />
+        <div className="space-y-6">
+          <EventTimeline
+            events={jobs.slice(0, 4).map((job) => ({
+              id: job.id,
+              title: `${job.modelType} • ${job.status}`,
+              description: job.completedAt ? `Accuracy ${((job.accuracy ?? 0) * 100).toFixed(1)}%` : "Training in progress",
+              timestamp: new Date(job.createdAt).toLocaleString(),
+              status: job.status === "completed" ? "success" : job.status === "running" ? "info" : "warning"
+            }))}
+          />
+          {alerts && <AlertFeed alerts={alerts} />}
+        </div>
       </section>
     </div>
   );

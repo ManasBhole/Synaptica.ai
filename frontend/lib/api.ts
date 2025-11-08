@@ -1,5 +1,7 @@
 import axios from "axios";
 
+type ISODateString = string;
+
 const baseURL = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8080";
 
 export const api = axios.create({
@@ -25,7 +27,7 @@ export interface PipelineStatus {
   id: string;
   stage: string;
   status: "healthy" | "degraded" | "failing";
-  updatedAt: string;
+  updatedAt: ISODateString;
   details: string;
 }
 
@@ -38,8 +40,8 @@ export interface TrainingJobSummary {
   id: string;
   modelType: string;
   status: string;
-  createdAt: string;
-  completedAt?: string;
+  createdAt: ISODateString;
+  completedAt?: ISODateString;
   accuracy?: number;
   loss?: number;
 }
@@ -50,11 +52,37 @@ export async function listTrainingJobs(limit = 10): Promise<TrainingJobSummary[]
 }
 
 export interface PredictionLatencyPoint {
-  timestamp: string;
+  timestamp: ISODateString;
   latencyMs: number;
 }
 
 export async function fetchPredictionLatency(): Promise<PredictionLatencyPoint[]> {
   const { data } = await api.get<PredictionLatencyPoint[]>("/api/v1/metrics/prediction-latency");
+  return data;
+}
+
+export interface AlertSummary {
+  critical: number;
+  warning: number;
+  info: number;
+}
+
+export interface AlertItem {
+  id: string;
+  source: string;
+  format: string;
+  status: string;
+  error: string;
+  payload: Record<string, unknown>;
+  updatedAt: ISODateString;
+}
+
+export interface AlertsResponse {
+  summary: AlertSummary;
+  items: AlertItem[];
+}
+
+export async function fetchAlerts(): Promise<AlertsResponse> {
+  const { data } = await api.get<AlertsResponse>("/api/v1/alerts");
   return data;
 }

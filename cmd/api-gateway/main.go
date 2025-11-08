@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/synaptica-ai/platform/pkg/analytics/cohort"
 	"github.com/synaptica-ai/platform/pkg/common/config"
 	"github.com/synaptica-ai/platform/pkg/common/database"
 	"github.com/synaptica-ai/platform/pkg/common/logger"
@@ -17,6 +18,7 @@ import (
 	"github.com/synaptica-ai/platform/pkg/gateway/httpclient"
 	"github.com/synaptica-ai/platform/pkg/gateway/middleware"
 	"github.com/synaptica-ai/platform/pkg/gateway/routes"
+	"github.com/synaptica-ai/platform/pkg/storage"
 )
 
 func main() {
@@ -73,6 +75,12 @@ func main() {
 
 	alertsHandler := routes.NewAlertsHandler(db)
 	alertsHandler.Register(apiRouter)
+
+	lakehouse := storage.NewLakehouseWriter(db)
+	olap := storage.NewOLAPWriter(db)
+	cohortService := cohort.NewService(lakehouse, olap)
+	cohortHandler := routes.NewCohortHandler(cohortService)
+	cohortHandler.Register(apiRouter)
 
 	// Server
 	server := &http.Server{

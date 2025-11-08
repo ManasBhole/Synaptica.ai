@@ -1,25 +1,92 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { fetchPipelineStatuses, fetchPredictionLatency, fetchSystemMetrics, listTrainingJobs } from "../lib/api";
+import {
+  fetchPipelineStatuses,
+  fetchPredictionLatency,
+  fetchSystemMetrics,
+  listTrainingJobs,
+  fetchAlerts,
+  PipelineStatus,
+  PredictionLatencyPoint,
+  SystemMetrics,
+  TrainingJobSummary,
+  AlertsResponse
+} from "../lib/api";
 
-const fallbackMetrics = {
-  gatewayLatencyMs: 124,
+type MetricsFallback = SystemMetrics;
+
+const fallbackMetrics: MetricsFallback = {
+  gatewayLatencyMs: 165,
   ingestionThroughput: 1850,
-  kafkaLag: 3,
+  kafkaLag: 4,
   piiDetectedToday: 2,
   trainingJobsActive: 3,
-  predictionsPerMinute: 492
+  predictionsPerMinute: 512
+};
+
+const fallbackPipelines: PipelineStatus[] = [
+  {
+    id: "ingestion",
+    stage: "API Gateway ➝ Ingestion",
+    status: "healthy",
+    updatedAt: new Date().toISOString(),
+    details: "2.3k msgs/min • backlog 3"
+  },
+  {
+    id: "privacy",
+    stage: "DLP ➝ De-ID",
+    status: "healthy",
+    updatedAt: new Date().toISOString(),
+    details: "PII alerts under threshold"
+  },
+  {
+    id: "ai-normalizer",
+    stage: "Normalizer ➝ Linkage ➝ Storage",
+    status: "degraded",
+    updatedAt: new Date().toISOString(),
+    details: "Kafka catch-up in progress"
+  }
+];
+
+const fallbackLatency: PredictionLatencyPoint[] = Array.from({ length: 12 }, (_, idx) => ({
+  timestamp: new Date(Date.now() - (11 - idx) * 5 * 60_000).toISOString(),
+  latencyMs: 140 + Math.sin(idx / 2) * 15
+}));
+
+const fallbackJobs: TrainingJobSummary[] = [
+  {
+    id: "demo-risk",
+    modelType: "risk-score",
+    status: "completed",
+    createdAt: new Date(Date.now() - 45 * 60_000).toISOString(),
+    completedAt: new Date().toISOString(),
+    accuracy: 0.87,
+    loss: 0.42
+  }
+];
+
+const fallbackAlerts: AlertsResponse = {
+  summary: { critical: 1, warning: 3, info: 5 },
+  items: [
+    {
+      id: "alert-demo",
+      source: "hospital",
+      format: "fhir",
+      status: "failed",
+      error: "PII validation rejected",
+      payload: { resourceType: "Patient", id: "patient-001" },
+      updatedAt: new Date().toISOString()
+    }
+  ]
 };
 
 export const useSystemMetrics = () =>
   useQuery({
     queryKey: ["system-metrics"],
     queryFn: fetchSystemMetrics,
-    staleTime: 10_000,
-    retry: 1,
-    placeholderData: fallbackMetrics,
-    initialData: fallbackMetrics
+    staleTime: 15_000,
+    placeholderData: fallbackMetrics
   });
 
 export const usePipelineStatuses = () =>
@@ -27,82 +94,15 @@ export const usePipelineStatuses = () =>
     queryKey: ["pipeline-status"],
     queryFn: fetchPipelineStatuses,
     staleTime: 15_000,
-    retry: 1,
-    placeholderData: [
-      {
-        id: "ingestion",
-        stage: "API Gateway ➝ Ingestion",
-        status: "healthy" as const,
-        updatedAt: new Date().toISOString(),
-        details: "2.3k events/min"
-      },
-      {
-        id: "privacy",
-        stage: "DLP ➝ De-ID",
-        status: "healthy" as const,
-        updatedAt: new Date().toISOString(),
-        details: "< 250ms median"
-      },
-      {
-        id: "normalizer",
-        stage: "Normalizer ➝ Linkage",
-        status: "degraded" as const,
-        updatedAt: new Date().toISOString(),
-        details: "Kafka catch-up (lag 3)"
-      }
-    ],
-    initialData: [
-      {
-        id: "ingestion",
-        stage: "API Gateway ➝ Ingestion",
-        status: "healthy" as const,
-        updatedAt: new Date().toISOString(),
-        details: "2.3k events/min"
-      },
-      {
-        id: "privacy",
-        stage: "DLP ➝ De-ID",
-        status: "healthy" as const,
-        updatedAt: new Date().toISOString(),
-        details: "< 250ms median"
-      },
-      {
-        id: "normalizer",
-        stage: "Normalizer ➝ Linkage",
-        status: "degraded" as const,
-        updatedAt: new Date().toISOString(),
-        details: "Kafka catch-up (lag 3)"
-      }
-    ]
+    placeholderData: fallbackPipelines
   });
 
 export const useTrainingJobs = () =>
   useQuery({
     queryKey: ["training-jobs"],
     queryFn: () => listTrainingJobs(8),
-    refetchInterval: 10_000,
-    placeholderData: [
-      {
-        id: "demo-risk",
-        modelType: "risk-score",
-        status: "completed",
-        createdAt: new Date(Date.now() - 3600_000).toISOString(),
-        completedAt: new Date().toISOString(),
-        accuracy: 0.87,
-        loss: 0.42
-      }
-    ],
-    initialData: [
-      {
-        id: "demo-risk",
-        modelType: "risk-score",
-        status: "completed",
-        createdAt: new Date(Date.now() - 3600_000).toISOString(),
-        completedAt: new Date().toISOString(),
-        accuracy: 0.87,
-        loss: 0.42
-      }
-    ]
+    refetchInterval: 15_000,
+    placeholderData: fallbackJobs
   });
 
 export const usePredictionLatency = () =>
@@ -110,12 +110,13 @@ export const usePredictionLatency = () =>
     queryKey: ["prediction-latency"],
     queryFn: fetchPredictionLatency,
     staleTime: 20_000,
-    placeholderData: Array.from({ length: 12 }, (_, idx) => ({
-      timestamp: new Date(Date.now() - (11 - idx) * 5 * 60_000).toISOString(),
-      latencyMs: 150 + Math.sin(idx / 2) * 20
-    })),
-    initialData: Array.from({ length: 12 }, (_, idx) => ({
-      timestamp: new Date(Date.now() - (11 - idx) * 5 * 60_000).toISOString(),
-      latencyMs: 150 + Math.sin(idx / 2) * 20
-    }))
+    placeholderData: fallbackLatency
+  });
+
+export const useAlerts = () =>
+  useQuery({
+    queryKey: ["alerts"],
+    queryFn: fetchAlerts,
+    refetchInterval: 20_000,
+    placeholderData: fallbackAlerts
   });
