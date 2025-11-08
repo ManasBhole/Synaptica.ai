@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/synaptica-ai/platform/pkg/analytics/dsl"
+	"github.com/synaptica-ai/platform/pkg/common/database"
+	"github.com/synaptica-ai/platform/pkg/common/logger"
 	"github.com/synaptica-ai/platform/pkg/common/models"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
@@ -43,7 +45,12 @@ func (w *LakehouseWriter) AutoMigrate() error {
 
 func (w *LakehouseWriter) Write(ctx context.Context, fact *LakehouseFact) error {
 	fact.CreatedAt = time.Now().UTC()
-	return w.db.WithContext(ctx).Create(fact).Error
+	if err := w.db.WithContext(ctx).Create(fact).Error; err != nil {
+		return err
+	}
+	tenantID := extractTenantID(fact)
+	go invalidateCohortCache(context.Background(), tenantID)
+	return nil
 }
 
 func (w *LakehouseWriter) QueryCohort(ctx context.Context, parsed dsl.Query, request models.CohortQuery) (models.CohortResult, error) {
@@ -87,6 +94,37 @@ func (w *LakehouseWriter) QueryCohort(ctx context.Context, parsed dsl.Query, req
 		QueryTime:  time.Since(start),
 		Metadata:   metadata,
 	}, nil
+}
+
+func (w *LakehouseWriter) ExportCohort(ctx context.Context, parsed dsl.Query, request models.CohortQuery, consumer func(*LakehouseFact) error) error {
+	limit := request.Limit
+	if limit <= 0 {
+		limit = parsed.Limit
+	}
+	if limit <= 0 {
+		limit = 5000
+	}
+	if limit > 50000 {
+		limit = 50000
+	}
+
+	query := w.buildCohortQuery(ctx, parsed, request).Order("timestamp desc").Limit(limit)
+	rows, err := query.Rows()
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var fact LakehouseFact
+		if err := w.db.ScanRows(rows, &fact); err != nil {
+			return err
+		}
+		if err := consumer(&fact); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
 }
 
 func (w *LakehouseWriter) buildCohortQuery(ctx context.Context, parsed dsl.Query, request models.CohortQuery) *gorm.DB {
@@ -164,34 +202,42 @@ func projectFacts(facts []LakehouseFact, fields []string) []map[string]interface
 	}
 	result := make([]map[string]interface{}, 0, len(facts))
 	for _, fact := range facts {
-		record := make(map[string]interface{}, len(fields))
-		for _, field := range fields {
-			switch field {
-			case "patient_id":
-				record["patient_id"] = fact.PatientID
-			case "master_id":
-				record["master_id"] = fact.MasterID
-			case "resource_type":
-				record["resource_type"] = fact.ResourceType
-			case "concept":
-				record["concept"] = fact.Canonical["concept"]
-			case "unit":
-				record["unit"] = fact.Canonical["unit"]
-			case "value":
-				record["value"] = fact.Canonical["value"]
-			case "timestamp":
-				record["timestamp"] = fact.Timestamp
-			case "code_loinc":
-				record["code_loinc"] = fact.Codes["loinc"]
-			case "code_snomed":
-				record["code_snomed"] = fact.Codes["snomed"]
-			default:
-				record[field] = nil
-			}
-		}
-		result = append(result, record)
+		projection := FactToProjection(&fact, fields)
+		result = append(result, projection)
 	}
 	return result
+}
+
+func FactToProjection(fact *LakehouseFact, fields []string) map[string]interface{} {
+	if len(fields) == 0 {
+		fields = []string{"patient_id", "resource_type", "concept", "value", "timestamp"}
+	}
+	record := make(map[string]interface{}, len(fields))
+	for _, field := range fields {
+		switch field {
+		case "patient_id":
+			record["patient_id"] = fact.PatientID
+		case "master_id":
+			record["master_id"] = fact.MasterID
+		case "resource_type":
+			record["resource_type"] = fact.ResourceType
+		case "concept":
+			record["concept"] = fact.Canonical["concept"]
+		case "unit":
+			record["unit"] = fact.Canonical["unit"]
+		case "value":
+			record["value"] = fact.Canonical["value"]
+		case "timestamp":
+			record["timestamp"] = fact.Timestamp
+		case "code_loinc":
+			record["code_loinc"] = fact.Codes["loinc"]
+		case "code_snomed":
+			record["code_snomed"] = fact.Codes["snomed"]
+		default:
+			record[field] = nil
+		}
+	}
+	return record
 }
 
 func parseTime(value string) (time.Time, error) {
@@ -206,6 +252,48 @@ func parseTime(value string) (time.Time, error) {
 
 func minInt(a, b int) int {
 	return int(math.Min(float64(a), float64(b)))
+}
+
+func extractTenantID(fact *LakehouseFact) string {
+	if fact == nil {
+		return ""
+	}
+	if fact.Canonical != nil {
+		if raw, ok := fact.Canonical["tenant_id"]; ok {
+			if tenant, ok := raw.(string); ok {
+				return tenant
+			}
+		}
+	}
+	if fact.Codes != nil {
+		if raw, ok := fact.Codes["tenant_id"]; ok {
+			if tenant, ok := raw.(string); ok {
+				return tenant
+			}
+		}
+	}
+	return ""
+}
+
+func invalidateCohortCache(ctx context.Context, tenantID string) {
+	client := database.GetRedis()
+	if client == nil {
+		return
+	}
+	if tenantID == "" {
+		tenantID = "public"
+	}
+	pattern := fmt.Sprintf("cohort:%s:*", tenantID)
+	iter := client.Scan(ctx, 0, pattern, 100).Iterator()
+	for iter.Next(ctx) {
+		if err := client.Del(ctx, iter.Val()).Err(); err != nil {
+			logger.Log.WithError(err).Warn("failed to delete cohort cache key")
+			break
+		}
+	}
+	if err := iter.Err(); err != nil {
+		logger.Log.WithError(err).Warn("error scanning cohort cache keys")
+	}
 }
 
 func (w *LakehouseWriter) GetTrainingData(ctx context.Context, filters map[string]interface{}) ([]map[string]interface{}, error) {

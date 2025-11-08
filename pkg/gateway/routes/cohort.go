@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -29,6 +31,7 @@ func NewCohortHandler(service *cohort.Service) *CohortHandler {
 func (h *CohortHandler) Register(r *mux.Router) {
 	r.HandleFunc("/cohort/query", h.handleQuery).Methods(http.MethodPost)
 	r.HandleFunc("/cohort/verify", h.handleVerify).Methods(http.MethodPost)
+	r.HandleFunc("/cohort/export", h.handleExport).Methods(http.MethodPost)
 }
 
 func (h *CohortHandler) handleQuery(w http.ResponseWriter, r *http.Request) {
@@ -150,5 +153,55 @@ func buildCohortCacheKey(tenant string, query models.CohortQuery) string {
 
 	bytes, _ := json.Marshal(payload)
 	hash := sha1.Sum(bytes)
-	return "cohort:" + hex.EncodeToString(hash[:])
+	if tenant == "" {
+		tenant = "public"
+	}
+	return "cohort:" + tenant + ":" + hex.EncodeToString(hash[:])
+}
+
+func (h *CohortHandler) handleExport(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	var req models.CohortQuery
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid cohort query", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(req.DSL) == "" {
+		http.Error(w, "dsl is required", http.StatusBadRequest)
+		return
+	}
+	if req.ID == "" {
+		req.ID = generateCohortID()
+	}
+	req.TenantID = resolveTenantID(r.Context())
+
+	filename := sanitizeFilename(req.ID)
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.csv\"", filename))
+
+	if err := h.service.Export(r.Context(), req, w); err != nil {
+		logger.Log.WithError(err).Error("failed to export cohort")
+	}
+}
+
+func sanitizeFilename(name string) string {
+	if strings.TrimSpace(name) == "" {
+		return "cohort-export"
+	}
+	name = strings.ToLower(strings.TrimSpace(name))
+	name = strings.ReplaceAll(name, " ", "-")
+	builder := strings.Builder{}
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			builder.WriteRune(r)
+			continue
+		}
+		builder.WriteRune('-')
+	}
+	sanitized := builder.String()
+	if sanitized == "" {
+		return "cohort-export"
+	}
+	return sanitized
 }

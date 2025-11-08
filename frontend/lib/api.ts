@@ -121,3 +121,8 @@ export async function verifyCohortDSL(dsl: string): Promise<{ status: string }> 
   const { data } = await api.post<{ status: string }>("/api/v1/cohort/verify", { dsl });
   return data;
 }
+
+export async function exportCohort(payload: CohortQueryPayload): Promise<Blob> {
+  const response = await api.post<Blob>("/api/v1/cohort/export", payload, { responseType: "blob" });
+  return response.data;
+}

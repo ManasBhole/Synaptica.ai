@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { CheckCircleIcon, ExclamationTriangleIcon, ArrowPathIcon } from "@heroicons/react/24/solid";
 import { MetricCard } from "../../components/metric-card";
-import { useCohortQuery, useCohortVerify } from "../../hooks/useCohort";
+import { useCohortExport, useCohortQuery, useCohortVerify } from "../../hooks/useCohort";
 import type { CohortQueryPayload } from "../../lib/api";
 
 const defaultDSL = `select patient_id, resource_type, concept, value, timestamp
@@ -56,15 +56,6 @@ const formatValue = (value: unknown) => {
   return String(value);
 };
 
-const escapeCsvValue = (value: unknown) => {
-  if (value === null || value === undefined) return "";
-  const stringValue = typeof value === "string" ? value : formatValue(value);
-  if (/[",\n]/.test(stringValue)) {
-    return `"${stringValue.replace(/"/g, '""')}"`;
-  }
-  return stringValue;
-};
-
 const formatDuration = (value: unknown) => {
   if (typeof value === "number") {
     const ms = value / 1_000_000;
@@ -89,6 +80,7 @@ export default function CohortPage() {
 
   const verify = useCohortVerify();
   const query = useCohortQuery();
+  const exportMutation = useCohortExport();
 
   const records = useMemo(() => {
     const raw = query.data?.metadata?.records;
@@ -121,7 +113,7 @@ export default function CohortPage() {
   const pagedRecords = records.slice(pageStart, pageEnd);
   const showingStart = totalRecords === 0 ? 0 : pageStart + 1;
   const showingEnd = Math.min(totalRecords, pageEnd);
-  const exportDisabled = totalRecords === 0;
+  const exportDisabled = totalRecords === 0 || exportMutation.status === "pending";
   const cacheHit = query.data?.metadata?.cacheHit === true;
   const tenant = typeof query.data?.metadata?.tenant === "string" ? (query.data?.metadata?.tenant as string) : undefined;
 
@@ -134,13 +126,15 @@ export default function CohortPage() {
     });
   };
 
+  const buildPayload = useCallback((): CohortQueryPayload => ({
+    dsl,
+    description: description || undefined,
+    limit,
+    fields: fields.length > 0 ? fields : undefined
+  }), [dsl, description, limit, fields]);
+
   const handleRunQuery = () => {
-    const payload: CohortQueryPayload = {
-      dsl,
-      description: description || undefined,
-      limit,
-      fields: fields.length > 0 ? fields : undefined
-    };
+    const payload = buildPayload();
     query.mutate(payload);
     setPage(0);
   };
@@ -150,25 +144,23 @@ export default function CohortPage() {
   };
 
   const handleExport = useCallback(() => {
-    if (records.length === 0) {
+    if (exportMutation.status === "pending") {
       return;
     }
-    const header = columns;
-    const csvRows = [header.join(",")];
-    records.forEach((row) => {
-      const line = header.map((column) => escapeCsvValue(row[column])).join(",");
-      csvRows.push(line);
+    const payload = buildPayload();
+    exportMutation.mutate(payload, {
+      onSuccess: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `${query.data?.cohortId ?? "cohort"}-${Date.now()}.csv`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        URL.revokeObjectURL(url);
+      }
     });
-    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${query.data?.cohortId ?? "cohort"}-${Date.now()}.csv`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
-  }, [records, columns, query.data?.cohortId]);
+  }, [buildPayload, exportMutation, query.data?.cohortId]);
 
   const handlePrevPage = useCallback(() => {
     setPage((prev) => Math.max(0, prev - 1));
@@ -376,9 +368,11 @@ export default function CohortPage() {
               disabled={exportDisabled}
               className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1 font-medium text-white/70 transition hover:border-brand-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Export CSV
+              {exportMutation.status === "pending" ? "Exporting…" : "Export CSV"}
             </button>
-            {query.status === "pending" && <ArrowPathIcon className="h-5 w-5 animate-spin text-brand-300" />}
+            {(query.status === "pending" || exportMutation.status === "pending") && (
+              <ArrowPathIcon className="h-5 w-5 animate-spin text-brand-300" />
+            )}
           </div>
         </div>
         <div className="mt-4 overflow-x-auto">
