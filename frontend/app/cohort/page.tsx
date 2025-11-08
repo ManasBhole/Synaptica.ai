@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { CheckCircleIcon, ExclamationTriangleIcon, ArrowPathIcon } from "@heroicons/react/24/solid";
 import { MetricCard } from "../../components/metric-card";
 import { useCohortQuery, useCohortVerify } from "../../hooks/useCohort";
@@ -56,11 +56,36 @@ const formatValue = (value: unknown) => {
   return String(value);
 };
 
+const escapeCsvValue = (value: unknown) => {
+  if (value === null || value === undefined) return "";
+  const stringValue = typeof value === "string" ? value : formatValue(value);
+  if (/[",\n]/.test(stringValue)) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+  return stringValue;
+};
+
+const formatDuration = (value: unknown) => {
+  if (typeof value === "number") {
+    const ms = value / 1_000_000;
+    if (ms >= 1000) {
+      return `${(ms / 1000).toFixed(2)} s`;
+    }
+    return `${ms.toFixed(1)} ms`;
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    return value;
+  }
+  return "—";
+};
+
 export default function CohortPage() {
   const [dsl, setDsl] = useState(defaultDSL);
   const [description, setDescription] = useState("");
   const [limit, setLimit] = useState(200);
   const [fields, setFields] = useState<string[]>(["patient_id", "resource_type", "concept", "value", "timestamp"]);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
 
   const verify = useCohortVerify();
   const query = useCohortQuery();
@@ -87,6 +112,19 @@ export default function CohortPage() {
     return ordered;
   }, [fields, records]);
 
+  const totalRecords = records.length;
+  const pageSizeSafe = Math.max(pageSize, 1);
+  const pageCount = Math.max(1, Math.ceil(totalRecords / pageSizeSafe));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageStart = safePage * pageSizeSafe;
+  const pageEnd = pageStart + pageSizeSafe;
+  const pagedRecords = records.slice(pageStart, pageEnd);
+  const showingStart = totalRecords === 0 ? 0 : pageStart + 1;
+  const showingEnd = Math.min(totalRecords, pageEnd);
+  const exportDisabled = totalRecords === 0;
+  const cacheHit = query.data?.metadata?.cacheHit === true;
+  const tenant = typeof query.data?.metadata?.tenant === "string" ? (query.data?.metadata?.tenant as string) : undefined;
+
   const handleToggleField = (key: string) => {
     setFields((prev) => {
       if (prev.includes(key)) {
@@ -104,17 +142,53 @@ export default function CohortPage() {
       fields: fields.length > 0 ? fields : undefined
     };
     query.mutate(payload);
+    setPage(0);
   };
 
   const handleVerify = () => {
     verify.mutate(dsl);
   };
 
-  const queryTime = query.data?.queryTime ?? "—";
+  const handleExport = useCallback(() => {
+    if (records.length === 0) {
+      return;
+    }
+    const header = columns;
+    const csvRows = [header.join(",")];
+    records.forEach((row) => {
+      const line = header.map((column) => escapeCsvValue(row[column])).join(",");
+      csvRows.push(line);
+    });
+    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${query.data?.cohortId ?? "cohort"}-${Date.now()}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  }, [records, columns, query.data?.cohortId]);
+
+  const handlePrevPage = useCallback(() => {
+    setPage((prev) => Math.max(0, prev - 1));
+  }, []);
+
+  const handleNextPage = useCallback(() => {
+    setPage((prev) => Math.min(pageCount - 1, prev + 1));
+  }, [pageCount]);
+
+  const handlePageSizeChange = (value: number) => {
+    setPageSize(value);
+    setPage(0);
+  };
+
+  const queryTimeDisplay = formatDuration(query.data?.queryTime);
   const cohortSize = query.data?.count ?? 0;
   const uniquePatients = query.data?.patientIds.length ?? 0;
 
   const patientPreview = query.data?.patientIds.slice(0, 12) ?? [];
+  const sliceCount = Array.isArray(query.data?.metadata?.slices) ? (query.data?.metadata?.slices as unknown[]).length : undefined;
 
   const isVerifying = verify.status === "pending";
   const verifyState = verify.status;
@@ -236,23 +310,76 @@ export default function CohortPage() {
           <div className="grid gap-4 md:grid-cols-2">
             <MetricCard label="Cohort Size" value={cohortSize ? cohortSize.toLocaleString() : "—"} change="Distinct facts returned" accent="brand" />
             <MetricCard label="Unique Patients" value={uniquePatients ? uniquePatients.toLocaleString() : "—"} change="Master IDs deduped" accent="accent" />
-            <MetricCard label="Query Time" value={queryTime} change="Lakehouse latency" accent="sunset" />
+            <MetricCard
+              label="Query Time"
+              value={queryTimeDisplay}
+              change={cacheHit ? "Served from cache" : "Live execution"}
+              accent="sunset"
+            />
             <MetricCard
               label="Preview IDs"
               value={patientPreview.length ? patientPreview.slice(0, 3).join(", ") : "—"}
-              change={patientPreview.length > 3 ? `+${patientPreview.length - 3} more` : "Live sample"}
+              change={sliceCount ? `${sliceCount} slices analysed` : tenant ? `Tenant • ${tenant}` : "Live sample"}
             />
           </div>
         </div>
       </section>
 
       <section className="glass-panel px-6 py-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-[11px] uppercase tracking-[0.32em] text-white/50">Record Sample</p>
             <h2 className="mt-2 text-xl font-semibold text-white">Materialized rows (top 200)</h2>
+            <p className="mt-1 text-xs text-white/40">
+              {cacheHit ? "Cached" : "Fresh"} • Showing {showingStart ? `${showingStart}–${showingEnd}` : "0"} of {totalRecords}
+            </p>
           </div>
-          {query.status === "pending" && <ArrowPathIcon className="h-5 w-5 animate-spin text-brand-300" />}
+          <div className="flex flex-wrap items-center gap-3 text-xs text-white/60">
+            <label className="flex items-center gap-2">
+              Rows/page
+              <select
+                value={pageSize}
+                onChange={(event) => handlePageSizeChange(Number(event.target.value))}
+                className="rounded-xl border border-white/10 bg-white/5 px-3 py-1 text-white focus:border-brand-400 focus:outline-none"
+              >
+                {[10, 25, 50, 100].map((size) => (
+                  <option key={size} value={size} className="bg-surface-raised text-slate-900">
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-white/70">
+              <button
+                type="button"
+                onClick={handlePrevPage}
+                disabled={safePage === 0}
+                className="rounded-full px-2 text-white/70 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Prev
+              </button>
+              <span>
+                Page {Math.min(safePage + 1, pageCount)} / {pageCount}
+              </span>
+              <button
+                type="button"
+                onClick={handleNextPage}
+                disabled={safePage >= pageCount - 1 || totalRecords === 0}
+                className="rounded-full px-2 text-white/70 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exportDisabled}
+              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1 font-medium text-white/70 transition hover:border-brand-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Export CSV
+            </button>
+            {query.status === "pending" && <ArrowPathIcon className="h-5 w-5 animate-spin text-brand-300" />}
+          </div>
         </div>
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full divide-y divide-white/10 text-left text-sm text-white/70">
@@ -266,9 +393,9 @@ export default function CohortPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
-              {records.slice(0, 200).map((row, rowIndex) => {
+              {pagedRecords.map((row, rowIndex) => {
                 const candidateId = row["patient_id"];
-                const rowKey = typeof candidateId === "string" ? candidateId : `row-${rowIndex}`;
+                const rowKey = typeof candidateId === "string" ? `${candidateId}-${pageStart + rowIndex}` : `row-${pageStart + rowIndex}`;
                 return (
                   <tr key={rowKey} className="hover:bg-white/5">
                     {columns.map((column) => (
@@ -279,9 +406,9 @@ export default function CohortPage() {
                   </tr>
                 );
               })}
-              {records.length === 0 && (
+              {totalRecords === 0 && (
                 <tr>
-                  <td colSpan={columns.length || 1} className="px-4 py-12 text-center text-sm text-white/40">
+                  <td colSpan={Math.max(columns.length, 1)} className="px-4 py-12 text-center text-sm text-white/40">
                     {query.status === "success"
                       ? "No records returned for this cohort. Adjust filters or expand the limit."
                       : "Run the cohort to preview records."}

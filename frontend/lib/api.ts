@@ -98,6 +98,9 @@ export interface CohortQueryPayload {
 export interface CohortMetadata {
   fields?: string[];
   records?: Array<Record<string, unknown>>;
+  cacheHit?: boolean;
+  tenant?: string;
+  slices?: unknown;
   [key: string]: unknown;
 }
 
@@ -105,7 +108,7 @@ export interface CohortResult {
   cohortId: string;
   patientIds: string[];
   count: number;
-  queryTime: string;
+  queryTime: string | number;
   metadata?: CohortMetadata;
 }
 

@@ -86,6 +86,7 @@ type LinkageResult struct {
 // Cohort Query
 type CohortQuery struct {
 	ID          string                 `json:"id"`
+	TenantID    string                 `json:"tenant_id,omitempty"`
 	DSL         string                 `json:"dsl"`
 	Description string                 `json:"description"`
 	Filters     map[string]interface{} `json:"filters"`

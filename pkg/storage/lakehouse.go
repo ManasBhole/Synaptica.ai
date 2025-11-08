@@ -94,6 +94,9 @@ func (w *LakehouseWriter) buildCohortQuery(ctx context.Context, parsed dsl.Query
 	if request.ID != "" {
 		tx = tx.Where("id = ?", request.ID)
 	}
+	if request.TenantID != "" {
+		tx = tx.Where("canonical ->> 'tenant_id' = ?", request.TenantID)
+	}
 	for _, clause := range parsed.Filters {
 		tx = applyClause(tx, clause)
 	}

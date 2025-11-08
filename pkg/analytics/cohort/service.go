@@ -29,10 +29,16 @@ func (s *Service) Execute(ctx context.Context, query models.CohortQuery) (models
 	if err != nil {
 		return models.CohortResult{}, err
 	}
+	if result.Metadata == nil {
+		result.Metadata = make(map[string]interface{})
+	}
 	if len(parsed.Filters) > 0 {
 		if rows, err := s.olap.QuerySubSecondSlicing(ctx, query.Filters); err == nil {
-			result.Metadata = map[string]interface{}{"slices": rows}
+			result.Metadata["slices"] = rows
 		}
+	}
+	if query.TenantID != "" {
+		result.Metadata["tenant"] = query.TenantID
 	}
 	return result, nil
 }
