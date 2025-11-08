@@ -8,6 +8,7 @@ import { usePredictionLatency } from "../../hooks/useSystemMetrics";
 
 export default function PredictionsPage() {
   const { data: latency } = usePredictionLatency();
+  const latencySeries = latency ?? [];
   const [patientId, setPatientId] = useState("patient-001");
   const [value, setValue] = useState(124);
   const [score, setScore] = useState<number | null>(null);
@@ -78,11 +79,11 @@ export default function PredictionsPage() {
         </div>
       </div>
       <aside className="space-y-6">
-        <MetricCard label="Latency p95" value={`${Math.round(latency.at(-1)?.latencyMs ?? 140)} ms`} accent="brand" />
+        <MetricCard label="Latency p95" value={`${Math.round(latencySeries.at(-1)?.latencyMs ?? 140)} ms`} accent="brand" />
         <MetricCard
           label="Throughput"
           value="12.4k / min"
-          footer={<Sparkline points={latency.map((item) => item.latencyMs)} />}
+          footer={<Sparkline points={latencySeries.map((item) => item.latencyMs)} />}
         />
         <div className="glass-panel px-6 py-6 text-sm text-white/60">
           <p className="font-semibold text-white">Serving engine</p>

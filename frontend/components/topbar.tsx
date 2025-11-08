@@ -6,6 +6,7 @@ import Link from "next/link";
 
 const titles: Record<string, string> = {
   "/": "Unified Intelligence Snapshot",
+  "/cohort": "Cohort Analytics Workbench",
   "/pipeline": "Data Pipelines & Observability",
   "/training": "AI Training Orchestration",
   "/predictions": "Realtime Predictions"

@@ -5,6 +5,7 @@ import { Suspense } from "react";
 
 const PipelineContent = () => {
   const { data } = usePipelineStatuses();
+  const stages = data ?? [];
 
   return (
     <div className="space-y-8">
@@ -15,7 +16,7 @@ const PipelineContent = () => {
           posture to help SREs detect drift before downstream AI workloads feel it.
         </p>
         <div className="mt-6 grid gap-4 md:grid-cols-2">
-          {data.map((stage) => (
+          {stages.map((stage) => (
             <div
               key={stage.id}
               className="rounded-3xl border border-white/5 bg-surface-raised/70 px-6 py-5 shadow-[rgba(15,23,42,0.35)_0px_15px_35px_-25px]"

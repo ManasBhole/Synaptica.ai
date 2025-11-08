@@ -86,3 +86,35 @@ export async function fetchAlerts(): Promise<AlertsResponse> {
   const { data } = await api.get<AlertsResponse>("/api/v1/alerts");
   return data;
 }
+
+export interface CohortQueryPayload {
+  id?: string;
+  dsl: string;
+  description?: string;
+  limit?: number;
+  fields?: string[];
+}
+
+export interface CohortMetadata {
+  fields?: string[];
+  records?: Array<Record<string, unknown>>;
+  [key: string]: unknown;
+}
+
+export interface CohortResult {
+  cohortId: string;
+  patientIds: string[];
+  count: number;
+  queryTime: string;
+  metadata?: CohortMetadata;
+}
+
+export async function runCohortQuery(payload: CohortQueryPayload): Promise<CohortResult> {
+  const { data } = await api.post<CohortResult>("/api/v1/cohort/query", payload);
+  return data;
+}
+
+export async function verifyCohortDSL(dsl: string): Promise<{ status: string }> {
+  const { data } = await api.post<{ status: string }>("/api/v1/cohort/verify", { dsl });
+  return data;
+}

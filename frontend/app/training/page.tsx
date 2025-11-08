@@ -8,7 +8,8 @@ import { MetricCard } from "../../components/metric-card";
 
 const TrainingContent = () => {
   const queryClient = useQueryClient();
-  const { data: jobs } = useTrainingJobs();
+  const { data: jobsData } = useTrainingJobs();
+  const jobs = jobsData ?? [];
   const [threshold, setThreshold] = useState(115);
   const [learningRate, setLearningRate] = useState(0.05);
   const [epochs, setEpochs] = useState(300);

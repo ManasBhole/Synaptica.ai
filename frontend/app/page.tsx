@@ -14,11 +14,23 @@ import {
 import { Suspense } from "react";
 
 const OverviewContent = () => {
-  const { data: metrics } = useSystemMetrics();
-  const { data: latency } = usePredictionLatency();
-  const { data: pipelines } = usePipelineStatuses();
-  const { data: jobs } = useTrainingJobs();
+  const { data: metricsData } = useSystemMetrics();
+  const { data: latencyData } = usePredictionLatency();
+  const { data: pipelinesData } = usePipelineStatuses();
+  const { data: jobsData } = useTrainingJobs();
   const { data: alerts } = useAlerts();
+
+  const metrics = metricsData ?? {
+    gatewayLatencyMs: 0,
+    ingestionThroughput: 0,
+    kafkaLag: 0,
+    piiDetectedToday: 0,
+    trainingJobsActive: 0,
+    predictionsPerMinute: 0
+  };
+  const latency = latencyData ?? [];
+  const pipelines = pipelinesData ?? [];
+  const jobs = jobsData ?? [];
 
   return (
     <div className="space-y-8">

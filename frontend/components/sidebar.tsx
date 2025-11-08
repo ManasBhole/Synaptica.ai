@@ -4,7 +4,7 @@ import type { ComponentProps, ElementType } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Route } from "next";
-import { ChartBarIcon, Cog6ToothIcon, CpuChipIcon, Squares2X2Icon } from "@heroicons/react/24/outline";
+import { ChartBarIcon, Cog6ToothIcon, CpuChipIcon, Squares2X2Icon, UserGroupIcon } from "@heroicons/react/24/outline";
 
 type NavLink = {
   label: string;
@@ -14,6 +14,7 @@ type NavLink = {
 
 const links: NavLink[] = [
   { label: "Overview", href: "/", icon: Squares2X2Icon },
+  { label: "Cohorts", href: "/cohort", icon: UserGroupIcon },
   { label: "Pipelines", href: "/pipeline", icon: Cog6ToothIcon },
   { label: "Training", href: "/training", icon: CpuChipIcon },
   { label: "Predictions", href: "/predictions", icon: ChartBarIcon }
