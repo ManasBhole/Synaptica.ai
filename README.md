@@ -122,6 +122,16 @@ flowchart LR
 - **Storage**: Delta Lake / BigQuery (Lakehouse)
 - **ML**: TensorFlow Serving, Triton
 
+## Observability & Metrics
+
+The API gateway exposes Prometheus metrics describing pipeline throughput, DLP posture, and service health.
+
+```
+GET http://localhost:8080/metrics
+```
+
+For long-retention storage (e.g., Cortex/Grafana Cloud) point your Prometheus remote_write to the provided stub configuration in `infra/observability/prometheus.yaml` and set the environment variables `CORTEX_REMOTE_WRITE_URL`, `CORTEX_USERNAME`, and `CORTEX_PASSWORD`.
+
 ## Getting Started
 
 ### Prerequisites
@@ -224,11 +234,24 @@ yarn dev  # or `npm run dev`
 
 Services use environment variables for configuration. See `.env.example` for details.
 
-## Cloud / Hosting
+### Single-domain hosting (Docker Compose)
 
-For end-to-end hosting on free/open-source providers (Fly.io, Railway, Vercel, etc.) see
-[`DEPLOYMENT.md`](DEPLOYMENT.md). It covers container images, Compose stacks, and CI that
-publishes to GHCR so you can deploy without running services locally.
+A full-stack Docker Compose bundle lives in `deploy/fullstack`. It spins up Postgres, Redis, Kafka, all Go services, the Next.js frontend, and an nginx edge proxy that exposes everything on **port 8080**.
+
+```bash
+# build & run the entire platform locally
+./scripts/fullstack-up.sh
+# browse http://localhost:8080 (nginx proxies /api to the gateway and / to the frontend)
+```
+
+For free-tier hosting (Fly.io, Railway, Render) provision a VM/container that can run Docker Compose and use the same file:
+
+```bash
+export DOCKER_HOST=...
+(cd deploy/fullstack && docker compose up -d)
+```
+
+Set your public domain (e.g. `synaptica.fly.dev`) to point at the nginx port and the UI + API will share that hostname. Update `NEXT_PUBLIC_API_BASE` if you need a custom API prefix.
 
 ## License
 

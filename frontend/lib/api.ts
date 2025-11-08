@@ -2,7 +2,8 @@ import axios from "axios";
 
 type ISODateString = string;
 
-const baseURL = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8080";
+const rawBase = process.env.NEXT_PUBLIC_API_BASE;
+const baseURL = rawBase && rawBase.trim().length > 0 ? rawBase : "";
 
 export const api = axios.create({
   baseURL,

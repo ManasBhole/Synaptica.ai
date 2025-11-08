@@ -12,6 +12,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/synaptica-ai/platform/pkg/common/logger"
+	"github.com/synaptica-ai/platform/pkg/observability/metrics"
 	"gorm.io/gorm"
 )
 
@@ -63,11 +64,11 @@ type PipelineActivity struct {
 }
 
 type DLPStats struct {
-	TodayFailed     int             `json:"todayFailed"`
-	TodayAccepted   int             `json:"todayAccepted"`
-	TokenVaultSize  int             `json:"tokenVaultSize"`
-	TopReasons      []ReasonCount   `json:"topReasons"`
-	RecentIncidents []DLPIncident   `json:"recentIncidents"`
+	TodayFailed     int           `json:"todayFailed"`
+	TodayAccepted   int           `json:"todayAccepted"`
+	TokenVaultSize  int           `json:"tokenVaultSize"`
+	TopReasons      []ReasonCount `json:"topReasons"`
+	RecentIncidents []DLPIncident `json:"recentIncidents"`
 }
 
 type ReasonCount struct {
@@ -155,6 +156,8 @@ func (h *MetricsHandler) handlePipelineActivity(w http.ResponseWriter, r *http.R
 		http.Error(w, "failed to collect pipeline summary", http.StatusInternalServerError)
 		return
 	}
+
+	metrics.ObservePipelineCounts(summary.Accepted, summary.Published, summary.Failed, summary.Backlog, summary.ThroughputPerMin)
 
 	events, err := h.fetchRecentIngestion(ctx, 25)
 	if err != nil {
@@ -282,6 +285,8 @@ func (h *MetricsHandler) handleDLPStats(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "failed to collect dlp stats", http.StatusInternalServerError)
 		return
 	}
+
+	metrics.ObserveDLPCounts(stats.TodayFailed, stats.TodayAccepted, stats.TokenVaultSize)
 
 	incidents, err := h.fetchRecentDLPIncidents(ctx, 20)
 	if err != nil {

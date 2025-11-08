@@ -19,12 +19,14 @@ import (
 	"github.com/synaptica-ai/platform/pkg/gateway/middleware"
 	"github.com/synaptica-ai/platform/pkg/gateway/routes"
 	"github.com/synaptica-ai/platform/pkg/linkage"
+	"github.com/synaptica-ai/platform/pkg/observability/metrics"
 	"github.com/synaptica-ai/platform/pkg/storage"
 )
 
 func main() {
 	logger.Init()
 	cfg := config.Load()
+	metrics.Init()
 
 	db, err := database.GetPostgres()
 	if err != nil {
@@ -58,6 +60,10 @@ func main() {
 	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"healthy"}`))
+	}).Methods("GET")
+
+	router.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+		metrics.WritePrometheus(w)
 	}).Methods("GET")
 
 	router.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
