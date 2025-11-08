@@ -11,6 +11,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/synaptica-ai/platform/pkg/common/config"
+	"github.com/synaptica-ai/platform/pkg/common/database"
 	"github.com/synaptica-ai/platform/pkg/common/logger"
 	"github.com/synaptica-ai/platform/pkg/gateway/auth"
 	"github.com/synaptica-ai/platform/pkg/gateway/httpclient"
@@ -21,6 +22,11 @@ import (
 func main() {
 	logger.Init()
 	cfg := config.Load()
+
+	db, err := database.GetPostgres()
+	if err != nil {
+		logger.Log.WithError(err).Fatal("Failed to connect to postgres")
+	}
 
 	// Initialize OIDC authenticator
 	oidcAuth, err := auth.NewOIDCAuthenticator(cfg.OIDCIssuer, cfg.OIDCClientID, cfg.OIDCClientSecret)
@@ -61,6 +67,9 @@ func main() {
 	apiRouter := router.PathPrefix("/api/v1").Subrouter()
 	ingestionProxy := &routes.IngestionProxy{Client: client, Cfg: cfg}
 	routes.RegisterIngestionRoutes(apiRouter, ingestionProxy)
+
+	metricsHandler := routes.NewMetricsHandler(db)
+	metricsHandler.Register(apiRouter)
 
 	// Server
 	server := &http.Server{
