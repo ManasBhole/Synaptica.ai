@@ -62,6 +62,30 @@ type PipelineActivity struct {
 	Events  []PipelineEvent         `json:"events"`
 }
 
+type DLPStats struct {
+	TodayFailed     int             `json:"todayFailed"`
+	TodayAccepted   int             `json:"todayAccepted"`
+	TokenVaultSize  int             `json:"tokenVaultSize"`
+	TopReasons      []ReasonCount   `json:"topReasons"`
+	RecentIncidents []DLPIncident   `json:"recentIncidents"`
+}
+
+type ReasonCount struct {
+	Reason string `json:"reason"`
+	Count  int    `json:"count"`
+}
+
+type DLPIncident struct {
+	ID         string    `json:"id"`
+	Source     string    `json:"source"`
+	Format     string    `json:"format"`
+	Status     string    `json:"status"`
+	Error      string    `json:"error"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+	CreatedAt  time.Time `json:"createdAt"`
+	RetryCount int       `json:"retryCount"`
+}
+
 func NewMetricsHandler(db *gorm.DB) *MetricsHandler {
 	return &MetricsHandler{db: db}
 }
@@ -70,6 +94,7 @@ func (h *MetricsHandler) Register(r *mux.Router) {
 	r.HandleFunc("/metrics/overview", h.handleOverview).Methods(http.MethodGet)
 	r.HandleFunc("/pipelines/status", h.handlePipelineStatus).Methods(http.MethodGet)
 	r.HandleFunc("/pipelines/activity", h.handlePipelineActivity).Methods(http.MethodGet)
+	r.HandleFunc("/metrics/dlp", h.handleDLPStats).Methods(http.MethodGet)
 	r.HandleFunc("/metrics/prediction-latency", h.handlePredictionLatency).Methods(http.MethodGet)
 	r.HandleFunc("/training/jobs", h.handleTrainingJobs).Methods(http.MethodGet)
 }
@@ -246,6 +271,116 @@ func (h *MetricsHandler) fetchRecentIngestion(ctx context.Context, limit int) ([
 		events = append(events, event)
 	}
 	return events, nil
+}
+
+func (h *MetricsHandler) handleDLPStats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	stats, err := h.collectDLPStats(ctx)
+	if err != nil {
+		logger.Log.WithError(err).Error("failed to collect dlp stats")
+		http.Error(w, "failed to collect dlp stats", http.StatusInternalServerError)
+		return
+	}
+
+	incidents, err := h.fetchRecentDLPIncidents(ctx, 20)
+	if err != nil {
+		logger.Log.WithError(err).Error("failed to fetch dlp incidents")
+		http.Error(w, "failed to fetch dlp incidents", http.StatusInternalServerError)
+		return
+	}
+
+	stats.RecentIncidents = incidents
+	writeJSON(w, stats)
+}
+
+func (h *MetricsHandler) collectDLPStats(ctx context.Context) (DLPStats, error) {
+	stats := DLPStats{}
+
+	if err := h.db.WithContext(ctx).Raw(`
+		SELECT
+			SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed,
+			SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END) AS accepted
+		FROM ingestion_requests
+		WHERE DATE(created_at) = CURRENT_DATE
+	`).Row().Scan(&stats.TodayFailed, &stats.TodayAccepted); err != nil {
+		return stats, err
+	}
+
+	if err := h.db.WithContext(ctx).Raw(`
+		SELECT COUNT(*)
+		FROM deid_token_vault
+	`).Row().Scan(&stats.TokenVaultSize); err != nil {
+		return stats, err
+	}
+
+	type row struct {
+		Reason string
+		Count  int
+	}
+	var rows []row
+	if err := h.db.WithContext(ctx).Raw(`
+		SELECT
+			COALESCE(NULLIF(TRIM(error), ''), 'Unknown reason') AS reason,
+			COUNT(*) AS count
+		FROM ingestion_requests
+		WHERE status = 'failed'
+		GROUP BY reason
+		ORDER BY count DESC
+		LIMIT 5
+	`).Scan(&rows).Error; err != nil {
+		return stats, err
+	}
+
+	stats.TopReasons = make([]ReasonCount, 0, len(rows))
+	for _, r := range rows {
+		stats.TopReasons = append(stats.TopReasons, ReasonCount{Reason: r.Reason, Count: r.Count})
+	}
+
+	return stats, nil
+}
+
+func (h *MetricsHandler) fetchRecentDLPIncidents(ctx context.Context, limit int) ([]DLPIncident, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+
+	rows := []struct {
+		ID         string    `gorm:"column:id"`
+		Source     string    `gorm:"column:source"`
+		Format     string    `gorm:"column:format"`
+		Status     string    `gorm:"column:status"`
+		Error      string    `gorm:"column:error"`
+		UpdatedAt  time.Time `gorm:"column:updated_at"`
+		CreatedAt  time.Time `gorm:"column:created_at"`
+		RetryCount int       `gorm:"column:retry_count"`
+	}{}
+
+	if err := h.db.WithContext(ctx).Raw(`
+		SELECT id, source, format, status, COALESCE(error, '') AS error, updated_at, created_at, retry_count
+		FROM ingestion_requests
+		WHERE status = 'failed'
+		ORDER BY updated_at DESC
+		LIMIT ?
+	`, limit).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	incidents := make([]DLPIncident, 0, len(rows))
+	for _, row := range rows {
+		incidents = append(incidents, DLPIncident{
+			ID:         row.ID,
+			Source:     row.Source,
+			Format:     row.Format,
+			Status:     row.Status,
+			Error:      strings.TrimSpace(row.Error),
+			UpdatedAt:  row.UpdatedAt,
+			CreatedAt:  row.CreatedAt,
+			RetryCount: row.RetryCount,
+		})
+	}
+
+	return incidents, nil
 }
 
 func (h *MetricsHandler) collectMetrics() (OverviewMetrics, error) {

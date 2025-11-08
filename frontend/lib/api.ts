@@ -118,6 +118,35 @@ export async function fetchAlerts(): Promise<AlertsResponse> {
   return data;
 }
 
+export interface DLPReasonCount {
+  reason: string;
+  count: number;
+}
+
+export interface DLPIncident {
+  id: string;
+  source: string;
+  format: string;
+  status: string;
+  error: string;
+  updatedAt: ISODateString;
+  createdAt: ISODateString;
+  retryCount: number;
+}
+
+export interface DLPStatsResponse {
+  todayFailed: number;
+  todayAccepted: number;
+  tokenVaultSize: number;
+  topReasons: DLPReasonCount[];
+  recentIncidents: DLPIncident[];
+}
+
+export async function fetchDLPStats(): Promise<DLPStatsResponse> {
+  const { data } = await api.get<DLPStatsResponse>("/api/v1/metrics/dlp");
+  return data;
+}
+
 export interface CohortQueryPayload {
   id?: string;
   dsl: string;
