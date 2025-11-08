@@ -23,7 +23,9 @@ func (s *Service) Execute(ctx context.Context, query models.CohortQuery) (models
 		return models.CohortResult{}, err
 	}
 	query.Filters = normalizeFilters(parsed.Filters)
-	result, err := s.lakehouse.QueryCohort(ctx, query)
+	query.Fields = parsed.SelectFields
+	query.Limit = parsed.Limit
+	result, err := s.lakehouse.QueryCohort(ctx, parsed, query)
 	if err != nil {
 		return models.CohortResult{}, err
 	}
