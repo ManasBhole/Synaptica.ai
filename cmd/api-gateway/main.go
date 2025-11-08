@@ -71,6 +71,9 @@ func main() {
 	metricsHandler := routes.NewMetricsHandler(db)
 	metricsHandler.Register(apiRouter)
 
+	alertsHandler := routes.NewAlertsHandler(db)
+	alertsHandler.Register(apiRouter)
+
 	// Server
 	server := &http.Server{
 		Addr:         fmt.Sprintf("%s:%s", cfg.ServerHost, cfg.ServerPort),
