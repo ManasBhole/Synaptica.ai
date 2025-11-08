@@ -146,6 +146,16 @@ type CohortDrilldown struct {
 	Metadata        map[string]interface{} `json:"metadata,omitempty"`
 }
 
+type CohortTemplate struct {
+	ID          string    `json:"id"`
+	TenantID    string    `json:"tenant_id,omitempty"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	DSL         string    `json:"dsl"`
+	Tags        []string  `json:"tags,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 // Feature Store
 type Feature struct {
 	Name      string                 `json:"name"`

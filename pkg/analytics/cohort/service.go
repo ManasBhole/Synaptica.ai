@@ -20,6 +20,7 @@ type Service struct {
 	olap      *storage.OLAPWriter
 	features  *storage.FeatureStore
 	linkage   *linkage.Repository
+	templates *TemplateRepository
 }
 
 func NewService(lakehouse *storage.LakehouseWriter, olap *storage.OLAPWriter, opts ...Option) *Service {
@@ -200,6 +201,13 @@ func (s *Service) Drilldown(ctx context.Context, req models.CohortDrilldownReque
 	return result, nil
 }
 
+func (s *Service) ListTemplates(ctx context.Context, tenantID string, limit int) ([]models.CohortTemplate, error) {
+	if s.templates == nil {
+		return []models.CohortTemplate{}, nil
+	}
+	return s.templates.List(ctx, tenantID, limit)
+}
+
 func (s *Service) VerifyDSL(input string) error {
 	_, err := dsl.Parse(input)
 	return err
@@ -262,5 +270,11 @@ func WithFeatureStore(store *storage.FeatureStore) Option {
 func WithLinkageRepository(repo *linkage.Repository) Option {
 	return func(s *Service) {
 		s.linkage = repo
+	}
+}
+
+func WithTemplateRepository(repo *TemplateRepository) Option {
+	return func(s *Service) {
+		s.templates = repo
 	}
 }

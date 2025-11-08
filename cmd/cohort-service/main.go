@@ -47,12 +47,17 @@ func main() {
 
 	featureStore := storage.NewFeatureStore(db, redisClient, cfg.FeatureOnlinePrefix, cfg.FeatureCacheTTL)
 	linkageRepo := linkage.NewRepository(db)
+	templateRepo := cohort.NewTemplateRepository(db)
+	if err := templateRepo.AutoMigrate(); err != nil {
+		logger.Log.WithError(err).Fatal("Failed to migrate cohort templates table")
+	}
 	app := &CohortApp{
 		service: cohort.NewService(
 			lakehouse,
 			olapWriter,
 			cohort.WithFeatureStore(featureStore),
 			cohort.WithLinkageRepository(linkageRepo),
+			cohort.WithTemplateRepository(templateRepo),
 		),
 	}
 

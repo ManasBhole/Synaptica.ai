@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"sort"
 	"strings"
 	"time"
@@ -32,6 +33,7 @@ func (h *CohortHandler) Register(r *mux.Router) {
 	r.HandleFunc("/cohort/query", h.handleQuery).Methods(http.MethodPost)
 	r.HandleFunc("/cohort/verify", h.handleVerify).Methods(http.MethodPost)
 	r.HandleFunc("/cohort/export", h.handleExport).Methods(http.MethodPost)
+	r.HandleFunc("/cohort/templates", h.handleTemplates).Methods(http.MethodGet)
 	r.HandleFunc("/cohort/{id}", h.handleDrilldown).Methods(http.MethodPost)
 }
 
@@ -233,4 +235,23 @@ func (h *CohortHandler) handleDrilldown(w http.ResponseWriter, r *http.Request) 
 	}
 
 	writeJSON(w, result)
+}
+
+func (h *CohortHandler) handleTemplates(w http.ResponseWriter, r *http.Request) {
+	tenantID := resolveTenantID(r.Context())
+	limit := 25
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 && parsed <= 100 {
+			limit = parsed
+		}
+	}
+
+	templates, err := h.service.ListTemplates(r.Context(), tenantID, limit)
+	if err != nil {
+		logger.Log.WithError(err).Error("failed to list cohort templates")
+		http.Error(w, "failed to load templates", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, map[string]interface{}{"items": templates})
 }

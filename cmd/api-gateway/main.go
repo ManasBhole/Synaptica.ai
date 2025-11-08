@@ -82,11 +82,16 @@ func main() {
 	olap := storage.NewOLAPWriter(db)
 	featureStore := storage.NewFeatureStore(db, redisClient, cfg.FeatureOnlinePrefix, cfg.FeatureCacheTTL)
 	linkageRepo := linkage.NewRepository(db)
+	templateRepo := cohort.NewTemplateRepository(db)
+	if err := templateRepo.AutoMigrate(); err != nil {
+		logger.Log.WithError(err).Warn("Failed to ensure cohort templates table")
+	}
 	cohortService := cohort.NewService(
 		lakehouse,
 		olap,
 		cohort.WithFeatureStore(featureStore),
 		cohort.WithLinkageRepository(linkageRepo),
+		cohort.WithTemplateRepository(templateRepo),
 	)
 	cohortHandler := routes.NewCohortHandler(cohortService)
 	cohortHandler.Register(apiRouter)

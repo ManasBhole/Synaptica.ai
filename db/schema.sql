@@ -94,3 +94,15 @@ CREATE TABLE IF NOT EXISTS patient_linkages (
 CREATE INDEX IF NOT EXISTS idx_patient_linkages_master ON patient_linkages(master_id);
 CREATE INDEX IF NOT EXISTS idx_patient_linkages_patient ON patient_linkages(patient_id);
 CREATE INDEX IF NOT EXISTS idx_patient_linkages_det_key ON patient_linkages(deterministic_key);
+
+CREATE TABLE IF NOT EXISTS cohort_templates (
+    id UUID PRIMARY KEY,
+    tenant_id TEXT,
+    name TEXT NOT NULL,
+    description TEXT,
+    dsl TEXT NOT NULL,
+    tags TEXT[] DEFAULT ARRAY[]::TEXT[],
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cohort_templates_tenant ON cohort_templates(tenant_id);
