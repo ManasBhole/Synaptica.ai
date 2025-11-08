@@ -25,34 +25,35 @@ const OverviewContent = () => {
           label="Ingestion Throughput"
           value={`${metrics.ingestionThroughput.toLocaleString()} events/min`}
           change="+8% vs yesterday"
+          accent="brand"
         />
-        <MetricCard label="PII Alerts Today" value={`${metrics.piiDetectedToday}`} change="Dual review complete" accent="primary" />
-        <MetricCard label="Active Training Jobs" value={`${metrics.trainingJobsActive}`} change="3 running / 8 queued" accent="emerald" />
+        <MetricCard label="PII Alerts Today" value={`${metrics.piiDetectedToday}`} change="Dual review complete" accent="accent" />
+        <MetricCard label="Active Training Jobs" value={`${metrics.trainingJobsActive}`} change="3 running / 8 queued" accent="sunset" />
       </section>
 
       <section className="grid gap-8 lg:grid-cols-3">
         <div className="glass-panel space-y-4 px-6 py-6 lg:col-span-2">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-white/50">Pipeline Status</p>
-              <h2 className="text-lg font-semibold text-white">Flow Health</h2>
+              <p className="text-[11px] uppercase tracking-[0.32em] text-white/50">Pipeline Status</p>
+              <h2 className="mt-2 text-xl font-semibold text-white">Flow Health</h2>
             </div>
-            <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs text-emerald-300">SLO • 99.3%</span>
+            <span className="rounded-full bg-brand-500/15 px-3 py-1 text-xs text-brand-200">SLO • 99.3%</span>
           </div>
-          <div className="divide-y divide-white/10">
+          <div className="divide-y divide-white/5">
             {pipelines.map((stage) => (
               <div key={stage.id} className="flex items-center justify-between py-4">
                 <div>
-                  <p className="text-sm font-medium text-white/80">{stage.stage}</p>
+                  <p className="text-sm font-semibold text-white/80">{stage.stage}</p>
                   <p className="text-xs text-white/50">{stage.details}</p>
                 </div>
                 <span
                   className={`rounded-full px-3 py-1 text-xs font-medium ${
                     stage.status === "healthy"
-                      ? "bg-emerald-500/10 text-emerald-300"
+                      ? "bg-brand-500/15 text-brand-200"
                       : stage.status === "degraded"
-                        ? "bg-amber-500/10 text-amber-300"
-                        : "bg-rose-500/10 text-rose-300"
+                        ? "bg-amber-500/15 text-amber-200"
+                        : "bg-rose-500/15 text-rose-200"
                   }`}
                 >
                   {stage.status.toUpperCase()}

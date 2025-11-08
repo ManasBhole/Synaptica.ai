@@ -5,25 +5,25 @@ interface MetricCardProps {
   value: string;
   change?: string;
   icon?: ReactNode;
-  accent?: "accent" | "primary" | "emerald";
+  accent?: "accent" | "brand" | "sunset";
   footer?: ReactNode;
 }
 
 const gradientByAccent: Record<string, string> = {
-  accent: "from-accent-400 to-primary-500",
-  primary: "from-primary-500 to-primary-600",
-  emerald: "from-emerald-400 to-teal-500"
+  accent: "from-accent-500 to-accent-400",
+  brand: "from-brand-500 to-brand-400",
+  sunset: "from-amber-400 to-pink-500"
 };
 
 export const MetricCard = ({ label, value, change, icon, accent = "accent", footer }: MetricCardProps) => {
   return (
-    <div className="glass-panel relative overflow-hidden px-6 py-5">
-      <div className={`absolute inset-x-4 top-0 h-px bg-gradient-to-r ${gradientByAccent[accent]} opacity-60`} />
+    <div className="glass-panel card-highlight relative overflow-hidden px-6 py-5">
+      <div className={`absolute inset-x-4 top-0 h-[2px] bg-gradient-to-r ${gradientByAccent[accent]} opacity-80`} />
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-white/50">{label}</p>
-          <p className="mt-2 text-2xl font-semibold text-white">{value}</p>
-          {change && <p className="mt-1 text-xs text-emerald-400">{change}</p>}
+          <p className="text-[11px] uppercase tracking-[0.32em] text-white/50">{label}</p>
+          <p className="mt-3 text-3xl font-semibold text-white">{value}</p>
+          {change && <p className="mt-2 text-xs text-brand-200/90">{change}</p>}
         </div>
         {icon && <div className="text-white/70">{icon}</div>}
       </div>

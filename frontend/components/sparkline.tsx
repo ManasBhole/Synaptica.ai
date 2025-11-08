@@ -3,7 +3,7 @@ interface SparklineProps {
   stroke?: string;
 }
 
-export const Sparkline = ({ points, stroke = "#38bdf8" }: SparklineProps) => {
+export const Sparkline = ({ points, stroke = "#a855f7" }: SparklineProps) => {
   if (points.length === 0) return null;
   const width = 120;
   const height = 40;

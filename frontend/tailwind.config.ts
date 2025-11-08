@@ -5,23 +5,27 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        primary: {
-          50: "#eff6ff",
-          100: "#dbeafe",
-          200: "#bfdbfe",
-          500: "#2563eb",
-          600: "#1d4ed8"
+        brand: {
+          50: "#f5f3ff",
+          100: "#ede9fe",
+          200: "#ddd6fe",
+          400: "#a855f7",
+          500: "#9333ea",
+          600: "#7e22ce"
         },
         accent: {
-          400: "#38bdf8",
-          500: "#0ea5e9"
+          400: "#fb7185",
+          500: "#f43f5e",
+          600: "#e11d48"
         },
-        slate: {
-          950: "#020617"
+        surface: {
+          DEFAULT: "#111827",
+          raised: "#1f2937"
         }
       },
       boxShadow: {
-        floating: "0 20px 45px -25px rgba(15, 118, 110, 0.45)"
+        floating: "0 15px 45px -20px rgba(147, 51, 234, 0.45)",
+        glow: "0 10px 30px rgba(244, 63, 94, 0.35)"
       }
     }
   },

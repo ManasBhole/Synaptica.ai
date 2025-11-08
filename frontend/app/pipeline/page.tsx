@@ -16,18 +16,21 @@ const PipelineContent = () => {
         </p>
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           {data.map((stage) => (
-            <div key={stage.id} className="rounded-3xl border border-white/5 bg-white/5 px-6 py-5">
-              <p className="text-xs uppercase tracking-[0.3em] text-white/40">{stage.stage}</p>
-              <p className="mt-3 text-sm text-white/70">{stage.details}</p>
+            <div
+              key={stage.id}
+              className="rounded-3xl border border-white/5 bg-surface-raised/70 px-6 py-5 shadow-[rgba(15,23,42,0.35)_0px_15px_35px_-25px]"
+            >
+              <p className="text-[11px] uppercase tracking-[0.3em] text-white/45">{stage.stage}</p>
+              <p className="mt-3 text-sm text-white/75">{stage.details}</p>
               <div className="mt-4 flex items-center justify-between text-xs text-white/50">
                 <span>Updated {new Date(stage.updatedAt).toLocaleTimeString()}</span>
                 <span
                   className={`rounded-full px-3 py-1 text-xs font-semibold ${
                     stage.status === "healthy"
-                      ? "bg-emerald-500/10 text-emerald-300"
+                      ? "bg-brand-500/15 text-brand-200"
                       : stage.status === "degraded"
-                        ? "bg-amber-500/10 text-amber-300"
-                        : "bg-rose-500/10 text-rose-300"
+                        ? "bg-amber-500/15 text-amber-200"
+                        : "bg-rose-500/15 text-rose-200"
                   }`}
                 >
                   {stage.status}
@@ -47,7 +50,7 @@ const PipelineContent = () => {
           {Array.from({ length: 28 }).map((_, idx) => (
             <div
               key={idx}
-              className={`h-16 rounded-2xl border border-white/5 bg-gradient-to-br ${idx % 5 === 0 ? "from-rose-500/30" : "from-primary-500/20"} to-slate-900/20 backdrop-blur`}
+              className={`h-16 rounded-2xl border border-white/5 bg-gradient-to-br ${idx % 5 === 0 ? "from-accent-500/25" : "from-brand-500/20"} to-transparent backdrop-blur`}
             >
               <div className="pt-4 text-sm font-semibold">{Math.max(0, 6 - (idx % 6))}m</div>
               <div className="text-[10px] uppercase tracking-[0.2em]">Lag</div>

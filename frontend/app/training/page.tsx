@@ -32,13 +32,13 @@ const TrainingContent = () => {
         <div className="glass-panel px-8 py-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-white/50">Model Factory</p>
-              <h2 className="text-xl font-semibold text-white">Queued & historical jobs</h2>
+              <p className="text-[11px] uppercase tracking-[0.32em] text-white/50">Model Factory</p>
+              <h2 className="mt-2 text-xl font-semibold text-white">Queued & historical jobs</h2>
             </div>
             <button
               onClick={() => mutation.mutate()}
               disabled={mutation.status === "pending"}
-              className="rounded-full bg-primary-500 px-5 py-2 text-sm font-medium text-white transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:bg-white/10"
+              className="rounded-full bg-gradient-to-r from-brand-500 to-accent-500 px-5 py-2 text-sm font-medium text-white shadow-glow transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-white/10"
             >
               {mutation.status === "pending" ? "Scheduling…" : "Schedule new training"}
             </button>
@@ -71,7 +71,7 @@ const TrainingContent = () => {
         <MetricCard label="Average Accuracy" value="87.4%" change="Last 7 runs" />
         <div className="glass-panel space-y-4 px-6 py-6">
           <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-white/50">Hyperparameters</p>
+            <p className="text-[11px] uppercase tracking-[0.32em] text-white/45">Hyperparameters</p>
             <h3 className="text-lg font-semibold text-white">NEO Risk Model</h3>
           </div>
           <label className="block text-xs uppercase tracking-widest text-white/40">
@@ -80,7 +80,7 @@ const TrainingContent = () => {
               type="number"
               value={threshold}
               onChange={(event) => setThreshold(Number(event.target.value))}
-              className="mt-2 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white focus:border-accent-400 focus:outline-none"
+              className="mt-2 w-full rounded-2xl border border-white/10 bg-surface-raised/60 px-4 py-2 text-sm text-white focus:border-brand-400 focus:outline-none"
             />
           </label>
           <label className="block text-xs uppercase tracking-widest text-white/40">

@@ -47,7 +47,7 @@ export default function PredictionsPage() {
               <input
                 value={patientId}
                 onChange={(event) => setPatientId(event.target.value)}
-                className="mt-2 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white"
+                className="mt-2 w-full rounded-2xl border border-white/10 bg-surface-raised/60 px-4 py-2 text-sm text-white focus:border-brand-400 focus:outline-none"
               />
             </label>
             <label className="text-xs uppercase tracking-widest text-white/40">
@@ -56,20 +56,20 @@ export default function PredictionsPage() {
                 type="number"
                 value={value}
                 onChange={(event) => setValue(Number(event.target.value))}
-                className="mt-2 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white"
+                className="mt-2 w-full rounded-2xl border border-white/10 bg-surface-raised/60 px-4 py-2 text-sm text-white focus:border-brand-400 focus:outline-none"
               />
             </label>
           </div>
           <button
             onClick={handlePredict}
             disabled={loading}
-            className="mt-6 rounded-full bg-accent-500 px-5 py-2 text-sm font-medium text-white transition hover:bg-accent-400 disabled:cursor-not-allowed disabled:bg-white/10"
+            className="mt-6 rounded-full bg-gradient-to-r from-brand-500 to-accent-500 px-5 py-2 text-sm font-medium text-white shadow-glow transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-white/10"
           >
             {loading ? "Generating…" : "Generate Risk Score"}
           </button>
           {error && <p className="mt-4 text-sm text-amber-400">{error}</p>}
           {score !== null && (
-            <div className="mt-6 rounded-3xl border border-white/10 bg-white/5 px-6 py-5 text-sm text-white/70">
+            <div className="mt-6 rounded-3xl border border-white/10 bg-surface-raised/70 px-6 py-5 text-sm text-white/70 shadow-[rgba(244,63,94,0.35)_0px_12px_30px_-20px]">
               <p className="text-xs uppercase tracking-[0.3em] text-white/50">Risk score</p>
               <p className="mt-2 text-3xl font-semibold text-white">{(score * 100).toFixed(1)}%</p>
               <p className="mt-1 text-xs text-white/40">Category: {score > 0.7 ? "High" : "Moderate"}</p>
@@ -78,7 +78,7 @@ export default function PredictionsPage() {
         </div>
       </div>
       <aside className="space-y-6">
-        <MetricCard label="Latency p95" value={`${Math.round(latency.at(-1)?.latencyMs ?? 140)} ms`} accent="primary" />
+        <MetricCard label="Latency p95" value={`${Math.round(latency.at(-1)?.latencyMs ?? 140)} ms`} accent="brand" />
         <MetricCard
           label="Throughput"
           value="12.4k / min"
