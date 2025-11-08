@@ -1,11 +1,13 @@
 package routes
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -34,6 +36,32 @@ type PipelineStatus struct {
 	Details   string    `json:"details"`
 }
 
+type PipelineActivitySummary struct {
+	Accepted         int `json:"accepted"`
+	Published        int `json:"published"`
+	Failed           int `json:"failed"`
+	DLQ              int `json:"dlq"`
+	Backlog          int `json:"backlog"`
+	ThroughputPerMin int `json:"throughputPerMin"`
+}
+
+type PipelineEvent struct {
+	ID          string     `json:"id"`
+	Source      string     `json:"source"`
+	Format      string     `json:"format"`
+	Status      string     `json:"status"`
+	Error       string     `json:"error,omitempty"`
+	RetryCount  int        `json:"retryCount"`
+	LastAttempt *time.Time `json:"lastAttempt,omitempty"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	UpdatedAt   time.Time  `json:"updatedAt"`
+}
+
+type PipelineActivity struct {
+	Summary PipelineActivitySummary `json:"summary"`
+	Events  []PipelineEvent         `json:"events"`
+}
+
 func NewMetricsHandler(db *gorm.DB) *MetricsHandler {
 	return &MetricsHandler{db: db}
 }
@@ -41,6 +69,7 @@ func NewMetricsHandler(db *gorm.DB) *MetricsHandler {
 func (h *MetricsHandler) Register(r *mux.Router) {
 	r.HandleFunc("/metrics/overview", h.handleOverview).Methods(http.MethodGet)
 	r.HandleFunc("/pipelines/status", h.handlePipelineStatus).Methods(http.MethodGet)
+	r.HandleFunc("/pipelines/activity", h.handlePipelineActivity).Methods(http.MethodGet)
 	r.HandleFunc("/metrics/prediction-latency", h.handlePredictionLatency).Methods(http.MethodGet)
 	r.HandleFunc("/training/jobs", h.handleTrainingJobs).Methods(http.MethodGet)
 }
@@ -90,6 +119,133 @@ func (h *MetricsHandler) handlePipelineStatus(w http.ResponseWriter, r *http.Req
 	}
 
 	writeJSON(w, statuses)
+}
+
+func (h *MetricsHandler) handlePipelineActivity(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	summary, err := h.collectPipelineSummary(ctx)
+	if err != nil {
+		logger.Log.WithError(err).Error("failed to collect pipeline summary")
+		http.Error(w, "failed to collect pipeline summary", http.StatusInternalServerError)
+		return
+	}
+
+	events, err := h.fetchRecentIngestion(ctx, 25)
+	if err != nil {
+		logger.Log.WithError(err).Error("failed to load recent ingestion events")
+		http.Error(w, "failed to load pipeline activity", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, PipelineActivity{Summary: summary, Events: events})
+}
+
+func (h *MetricsHandler) collectPipelineSummary(ctx context.Context) (PipelineActivitySummary, error) {
+	summary := PipelineActivitySummary{}
+
+	var counts struct {
+		Accepted  sql.NullInt64
+		Published sql.NullInt64
+		Failed    sql.NullInt64
+	}
+
+	if err := h.db.WithContext(ctx).Raw(`
+		SELECT
+			SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END) AS accepted,
+			SUM(CASE WHEN status = 'published' THEN 1 ELSE 0 END) AS published,
+			SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed
+		FROM ingestion_requests
+		WHERE created_at > NOW() - INTERVAL '1 hour'
+	`).Scan(&counts).Error; err != nil {
+		return summary, err
+	}
+
+	if counts.Accepted.Valid {
+		summary.Accepted = int(counts.Accepted.Int64)
+	}
+	if counts.Published.Valid {
+		summary.Published = int(counts.Published.Int64)
+	}
+	if counts.Failed.Valid {
+		summary.Failed = int(counts.Failed.Int64)
+		summary.DLQ = summary.Failed
+	}
+
+	var backlog sql.NullInt64
+	if err := h.db.WithContext(ctx).Raw(`
+		SELECT COUNT(*)
+		FROM ingestion_requests
+		WHERE status <> 'published'
+	`).Scan(&backlog).Error; err != nil {
+		return summary, err
+	}
+	if backlog.Valid {
+		summary.Backlog = int(backlog.Int64)
+	}
+
+	var throughput sql.NullInt64
+	if err := h.db.WithContext(ctx).Raw(`
+		SELECT COUNT(*)
+		FROM ingestion_requests
+		WHERE created_at > NOW() - INTERVAL '1 minute'
+	`).Scan(&throughput).Error; err != nil {
+		return summary, err
+	}
+	if throughput.Valid {
+		summary.ThroughputPerMin = int(throughput.Int64)
+	}
+
+	return summary, nil
+}
+
+func (h *MetricsHandler) fetchRecentIngestion(ctx context.Context, limit int) ([]PipelineEvent, error) {
+	if limit <= 0 {
+		limit = 25
+	}
+
+	rows := []struct {
+		ID          string     `gorm:"column:id"`
+		Source      string     `gorm:"column:source"`
+		Format      string     `gorm:"column:format"`
+		Status      string     `gorm:"column:status"`
+		Error       string     `gorm:"column:error"`
+		RetryCount  int        `gorm:"column:retry_count"`
+		LastAttempt *time.Time `gorm:"column:last_attempt"`
+		CreatedAt   time.Time  `gorm:"column:created_at"`
+		UpdatedAt   time.Time  `gorm:"column:updated_at"`
+	}{}
+
+	if err := h.db.WithContext(ctx).Raw(`
+		SELECT id, source, format, status, COALESCE(error, '') AS error, retry_count, last_attempt, created_at, updated_at
+		FROM ingestion_requests
+		ORDER BY created_at DESC
+		LIMIT ?
+	`, limit).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	events := make([]PipelineEvent, 0, len(rows))
+	for _, row := range rows {
+		// treat empty string error as omitted
+		event := PipelineEvent{
+			ID:         row.ID,
+			Source:     row.Source,
+			Format:     row.Format,
+			Status:     row.Status,
+			RetryCount: row.RetryCount,
+			CreatedAt:  row.CreatedAt,
+			UpdatedAt:  row.UpdatedAt,
+		}
+		if row.LastAttempt != nil {
+			event.LastAttempt = row.LastAttempt
+		}
+		if strings.TrimSpace(row.Error) != "" {
+			event.Error = row.Error
+		}
+		events = append(events, event)
+	}
+	return events, nil
 }
 
 func (h *MetricsHandler) collectMetrics() (OverviewMetrics, error) {

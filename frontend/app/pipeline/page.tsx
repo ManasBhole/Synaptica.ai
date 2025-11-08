@@ -1,14 +1,31 @@
 'use client';
 
-import { usePipelineStatuses } from "../../hooks/useSystemMetrics";
+import { usePipelineStatuses, usePipelineActivity } from "../../hooks/useSystemMetrics";
 import { Suspense } from "react";
+import { MetricCard } from "../../components/metric-card";
 
 const PipelineContent = () => {
   const { data } = usePipelineStatuses();
   const stages = data ?? [];
+  const { data: activity } = usePipelineActivity();
+  const summary = activity?.summary ?? {
+    accepted: 0,
+    published: 0,
+    failed: 0,
+    dlq: 0,
+    backlog: 0,
+    throughputPerMin: 0
+  };
+  const events = activity?.events ?? [];
 
   return (
     <div className="space-y-8">
+      <div className="grid gap-6 md:grid-cols-4">
+        <MetricCard label="Throughput" value={`${summary.throughputPerMin}/min`} change="Realtime ingestion" accent="brand" />
+        <MetricCard label="Accepted" value={summary.accepted.toLocaleString()} change="Last hour" accent="accent" />
+        <MetricCard label="Published" value={summary.published.toLocaleString()} change="Last hour" accent="sunset" />
+        <MetricCard label="DLQ" value={summary.dlq.toLocaleString()} change={`Backlog ${summary.backlog}`} />
+      </div>
       <div className="glass-panel px-8 py-6">
         <h2 className="text-xl font-semibold text-white">Live Topology</h2>
         <p className="mt-2 max-w-2xl text-sm text-white/60">
@@ -42,21 +59,54 @@ const PipelineContent = () => {
         </div>
       </div>
       <div className="glass-panel px-8 py-6">
-        <h3 className="text-lg font-semibold text-white">Streaming Lag Heatmap</h3>
+        <h3 className="text-lg font-semibold text-white">Recent Ingestion Activity</h3>
         <p className="mt-2 text-sm text-white/60">
-          Kafka partitions, batch windows, and FHIR bundle delivery are tracked with 1-minute granularity. Automated
-          mitigation can be triggered when lag exceeds thresholds.
+          Live feed of upstream submissions with PHI screening outcomes, retry counts, and downstream publish status.
         </p>
-        <div className="mt-6 grid grid-cols-7 gap-3 text-center text-xs text-white/70">
-          {Array.from({ length: 28 }).map((_, idx) => (
-            <div
-              key={idx}
-              className={`h-16 rounded-2xl border border-white/5 bg-gradient-to-br ${idx % 5 === 0 ? "from-accent-500/25" : "from-brand-500/20"} to-transparent backdrop-blur`}
-            >
-              <div className="pt-4 text-sm font-semibold">{Math.max(0, 6 - (idx % 6))}m</div>
-              <div className="text-[10px] uppercase tracking-[0.2em]">Lag</div>
-            </div>
-          ))}
+        <div className="mt-6 overflow-x-auto">
+          <table className="min-w-full divide-y divide-white/10 text-left text-sm text-white/70">
+            <thead>
+              <tr>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Source</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Format</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Status</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Retries</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Updated</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Details</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {events.map((event) => (
+                <tr key={event.id} className="hover:bg-white/5">
+                  <td className="px-4 py-3 font-medium text-white">{event.source}</td>
+                  <td className="px-4 py-3 text-white/60">{event.format.toUpperCase()}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        event.status === "published"
+                          ? "bg-brand-500/15 text-brand-200"
+                          : event.status === "accepted"
+                            ? "bg-amber-500/15 text-amber-200"
+                            : "bg-rose-500/15 text-rose-200"
+                      }`}
+                    >
+                      {event.status.toUpperCase()}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-white/60">{event.retryCount}</td>
+                  <td className="px-4 py-3 text-white/60">{new Date(event.updatedAt).toLocaleTimeString()}</td>
+                  <td className="px-4 py-3 text-xs text-white/50">{event.error ?? "—"}</td>
+                </tr>
+              ))}
+              {events.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-white/40">
+                    No ingestion activity yet. Submit upstream data to populate this feed.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

@@ -93,6 +93,7 @@ type Config struct {
 	TrainingArtifactDir     string
 	TrainingMaxWorkers      int
 	TrainingSimulationDelay time.Duration
+	TrainingBaseURL         string
 }
 
 func Load() *Config {
@@ -167,6 +168,7 @@ func Load() *Config {
 		TrainingArtifactDir:     getEnv("TRAINING_ARTIFACT_DIR", "artifacts/training"),
 		TrainingMaxWorkers:      getIntEnv("TRAINING_MAX_WORKERS", 2),
 		TrainingSimulationDelay: getDuration("TRAINING_SIMULATION_DELAY", 5*time.Second),
+		TrainingBaseURL:         getEnv("TRAINING_BASE_URL", "http://localhost:8088"),
 	}
 }
 

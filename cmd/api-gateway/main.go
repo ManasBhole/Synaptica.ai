@@ -96,6 +96,9 @@ func main() {
 	cohortHandler := routes.NewCohortHandler(cohortService)
 	cohortHandler.Register(apiRouter)
 
+	trainingProxy := routes.NewTrainingProxy(client, cfg)
+	routes.RegisterTrainingRoutes(apiRouter, trainingProxy)
+
 	// Server
 	server := &http.Server{
 		Addr:         fmt.Sprintf("%s:%s", cfg.ServerHost, cfg.ServerPort),

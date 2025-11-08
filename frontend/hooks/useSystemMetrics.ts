@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   fetchPipelineStatuses,
+  fetchPipelineActivity,
   fetchPredictionLatency,
   fetchSystemMetrics,
   listTrainingJobs,
@@ -11,7 +12,8 @@ import {
   PredictionLatencyPoint,
   SystemMetrics,
   TrainingJobSummary,
-  AlertsResponse
+  AlertsResponse,
+  PipelineActivityResponse
 } from "../lib/api";
 
 type MetricsFallback = SystemMetrics;
@@ -81,6 +83,27 @@ const fallbackAlerts: AlertsResponse = {
   ]
 };
 
+const fallbackPipelineActivity: PipelineActivityResponse = {
+  summary: {
+    accepted: 18,
+    published: 16,
+    failed: 2,
+    dlq: 2,
+    backlog: 4,
+    throughputPerMin: 22
+  },
+  events: Array.from({ length: 8 }).map((_, idx) => ({
+    id: `demo-${idx}`,
+    source: idx % 2 === 0 ? "hospital" : "lab",
+    format: idx % 3 === 0 ? "fhir" : "csv",
+    status: idx % 5 === 0 ? "failed" : idx % 3 === 0 ? "accepted" : "published",
+    retryCount: idx % 4 === 0 ? 1 : 0,
+    createdAt: new Date(Date.now() - idx * 4 * 60_000).toISOString(),
+    updatedAt: new Date(Date.now() - idx * 3 * 60_000).toISOString(),
+    error: idx % 5 === 0 ? "PII detected" : undefined
+  }))
+};
+
 export const useSystemMetrics = () =>
   useQuery({
     queryKey: ["system-metrics"],
@@ -95,6 +118,14 @@ export const usePipelineStatuses = () =>
     queryFn: fetchPipelineStatuses,
     staleTime: 15_000,
     placeholderData: fallbackPipelines
+  });
+
+export const usePipelineActivity = () =>
+  useQuery({
+    queryKey: ["pipeline-activity"],
+    queryFn: fetchPipelineActivity,
+    refetchInterval: 15_000,
+    placeholderData: fallbackPipelineActivity
   });
 
 export const useTrainingJobs = () =>

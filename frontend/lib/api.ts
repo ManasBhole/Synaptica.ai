@@ -36,6 +36,37 @@ export async function fetchPipelineStatuses(): Promise<PipelineStatus[]> {
   return data;
 }
 
+export interface PipelineActivitySummary {
+  accepted: number;
+  published: number;
+  failed: number;
+  dlq: number;
+  backlog: number;
+  throughputPerMin: number;
+}
+
+export interface PipelineEvent {
+  id: string;
+  source: string;
+  format: string;
+  status: string;
+  error?: string;
+  retryCount: number;
+  lastAttempt?: ISODateString;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+}
+
+export interface PipelineActivityResponse {
+  summary: PipelineActivitySummary;
+  events: PipelineEvent[];
+}
+
+export async function fetchPipelineActivity(): Promise<PipelineActivityResponse> {
+  const { data } = await api.get<PipelineActivityResponse>("/api/v1/pipelines/activity");
+  return data;
+}
+
 export interface TrainingJobSummary {
   id: string;
   modelType: string;
