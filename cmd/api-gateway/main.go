@@ -18,6 +18,7 @@ import (
 	"github.com/synaptica-ai/platform/pkg/gateway/httpclient"
 	"github.com/synaptica-ai/platform/pkg/gateway/middleware"
 	"github.com/synaptica-ai/platform/pkg/gateway/routes"
+	"github.com/synaptica-ai/platform/pkg/linkage"
 	"github.com/synaptica-ai/platform/pkg/storage"
 )
 
@@ -76,9 +77,17 @@ func main() {
 	alertsHandler := routes.NewAlertsHandler(db)
 	alertsHandler.Register(apiRouter)
 
+	redisClient := database.GetRedis()
 	lakehouse := storage.NewLakehouseWriter(db)
 	olap := storage.NewOLAPWriter(db)
-	cohortService := cohort.NewService(lakehouse, olap)
+	featureStore := storage.NewFeatureStore(db, redisClient, cfg.FeatureOnlinePrefix, cfg.FeatureCacheTTL)
+	linkageRepo := linkage.NewRepository(db)
+	cohortService := cohort.NewService(
+		lakehouse,
+		olap,
+		cohort.WithFeatureStore(featureStore),
+		cohort.WithLinkageRepository(linkageRepo),
+	)
 	cohortHandler := routes.NewCohortHandler(cohortService)
 	cohortHandler.Register(apiRouter)
 

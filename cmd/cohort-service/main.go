@@ -16,6 +16,7 @@ import (
 	"github.com/synaptica-ai/platform/pkg/common/database"
 	"github.com/synaptica-ai/platform/pkg/common/logger"
 	"github.com/synaptica-ai/platform/pkg/common/models"
+	"github.com/synaptica-ai/platform/pkg/linkage"
 	"github.com/synaptica-ai/platform/pkg/storage"
 )
 
@@ -32,6 +33,8 @@ func main() {
 		logger.Log.WithError(err).Fatal("Failed to connect to database")
 	}
 
+	redisClient := database.GetRedis()
+
 	lakehouse := storage.NewLakehouseWriter(db)
 	if err := lakehouse.AutoMigrate(); err != nil {
 		logger.Log.WithError(err).Fatal("Failed to migrate lakehouse tables")
@@ -42,7 +45,16 @@ func main() {
 		logger.Log.WithError(err).Fatal("Failed to migrate OLAP tables")
 	}
 
-	app := &CohortApp{service: cohort.NewService(lakehouse, olapWriter)}
+	featureStore := storage.NewFeatureStore(db, redisClient, cfg.FeatureOnlinePrefix, cfg.FeatureCacheTTL)
+	linkageRepo := linkage.NewRepository(db)
+	app := &CohortApp{
+		service: cohort.NewService(
+			lakehouse,
+			olapWriter,
+			cohort.WithFeatureStore(featureStore),
+			cohort.WithLinkageRepository(linkageRepo),
+		),
+	}
 
 	router := mux.NewRouter()
 	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -55,7 +67,7 @@ func main() {
 	}).Methods(http.MethodGet)
 	router.HandleFunc("/api/v1/cohort/query", app.handleQuery).Methods(http.MethodPost)
 	router.HandleFunc("/api/v1/cohort/verify", app.handleVerify).Methods(http.MethodPost)
-	router.HandleFunc("/api/v1/cohort/{id}", app.handleGetCohort).Methods(http.MethodGet)
+	router.HandleFunc("/api/v1/cohort/{id}", app.handleDrilldown).Methods(http.MethodPost)
 
 	server := &http.Server{
 		Addr:    fmt.Sprintf("%s:%s", cfg.ServerHost, "8087"),
@@ -128,12 +140,26 @@ func (a *CohortApp) handleVerify(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (a *CohortApp) handleGetCohort(w http.ResponseWriter, r *http.Request) {
+func (a *CohortApp) handleDrilldown(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
 	id := mux.Vars(r)["id"]
+	if id == "" {
+		http.Error(w, "cohort id is required", http.StatusBadRequest)
+		return
+	}
+
+	var req models.CohortDrilldownRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	req.CohortID = id
+
 	ctx := r.Context()
-	result, err := a.service.Execute(ctx, models.CohortQuery{ID: id, DSL: fmt.Sprintf("select patient_id where id = '%s'", id)})
+	result, err := a.service.Drilldown(ctx, req)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 

@@ -101,3 +101,18 @@ func (fs *FeatureStore) GetFeatureViews(ctx context.Context, names []string) (ma
 	}
 	return result, nil
 }
+
+func (fs *FeatureStore) GetLatestOfflineFeatures(ctx context.Context, patientID string) (map[string]interface{}, error) {
+	if fs.offlineDB == nil {
+		return map[string]interface{}{}, nil
+	}
+	var feature OfflineFeature
+	query := fs.offlineDB.WithContext(ctx).Where("patient_id = ?", patientID).Order("created_at desc").Limit(1)
+	if err := query.First(&feature).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return map[string]interface{}{}, nil
+		}
+		return map[string]interface{}{}, err
+	}
+	return map[string]interface{}(feature.Features), nil
+}

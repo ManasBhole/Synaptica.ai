@@ -60,3 +60,16 @@ func (r *Repository) RecentLinks(ctx context.Context, limit int) ([]PatientLink,
 	result := r.db.WithContext(ctx).Order("created_at DESC").Limit(limit).Find(&links)
 	return links, result.Error
 }
+
+func (r *Repository) FindLinksByPatient(ctx context.Context, patientID string, limit int) ([]PatientLink, error) {
+	if limit <= 0 {
+		limit = 25
+	}
+	var links []PatientLink
+	result := r.db.WithContext(ctx).
+		Where("patient_id = ?", patientID).
+		Order("created_at DESC").
+		Limit(limit).
+		Find(&links)
+	return links, result.Error
+}

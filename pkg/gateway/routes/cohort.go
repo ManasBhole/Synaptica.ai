@@ -32,6 +32,7 @@ func (h *CohortHandler) Register(r *mux.Router) {
 	r.HandleFunc("/cohort/query", h.handleQuery).Methods(http.MethodPost)
 	r.HandleFunc("/cohort/verify", h.handleVerify).Methods(http.MethodPost)
 	r.HandleFunc("/cohort/export", h.handleExport).Methods(http.MethodPost)
+	r.HandleFunc("/cohort/{id}", h.handleDrilldown).Methods(http.MethodPost)
 }
 
 func (h *CohortHandler) handleQuery(w http.ResponseWriter, r *http.Request) {
@@ -204,4 +205,32 @@ func sanitizeFilename(name string) string {
 		return "cohort-export"
 	}
 	return sanitized
+}
+
+func (h *CohortHandler) handleDrilldown(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	vars := mux.Vars(r)
+	cohortID := vars["id"]
+	if cohortID == "" {
+		http.Error(w, "cohort id is required", http.StatusBadRequest)
+		return
+	}
+
+	var req models.CohortDrilldownRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	req.CohortID = cohortID
+	req.TenantID = resolveTenantID(r.Context())
+
+	result, err := h.service.Drilldown(r.Context(), req)
+	if err != nil {
+		logger.Log.WithError(err).Error("failed to drilldown cohort")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	writeJSON(w, result)
 }

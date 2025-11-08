@@ -127,6 +127,21 @@ func (w *LakehouseWriter) ExportCohort(ctx context.Context, parsed dsl.Query, re
 	return rows.Err()
 }
 
+func (w *LakehouseWriter) FetchTimeline(ctx context.Context, parsed dsl.Query, request models.CohortQuery, patientID string, limit int) ([]LakehouseFact, error) {
+	if patientID == "" {
+		return nil, fmt.Errorf("patient_id is required")
+	}
+	if limit <= 0 {
+		limit = 500
+	}
+	query := w.buildCohortQuery(ctx, parsed, request).Where("patient_id = ?", patientID).Order("timestamp asc").Limit(limit)
+	var facts []LakehouseFact
+	if err := query.Find(&facts).Error; err != nil {
+		return nil, err
+	}
+	return facts, nil
+}
+
 func (w *LakehouseWriter) buildCohortQuery(ctx context.Context, parsed dsl.Query, request models.CohortQuery) *gorm.DB {
 	tx := w.db.WithContext(ctx).Model(&LakehouseFact{})
 	if request.ID != "" {
@@ -233,6 +248,10 @@ func FactToProjection(fact *LakehouseFact, fields []string) map[string]interface
 			record["code_loinc"] = fact.Codes["loinc"]
 		case "code_snomed":
 			record["code_snomed"] = fact.Codes["snomed"]
+		case "codes":
+			record["codes"] = map[string]interface{}(fact.Codes)
+		case "canonical":
+			record["canonical"] = map[string]interface{}(fact.Canonical)
 		default:
 			record[field] = nil
 		}

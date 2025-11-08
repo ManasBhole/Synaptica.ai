@@ -102,6 +102,50 @@ type CohortResult struct {
 	Metadata   map[string]interface{} `json:"metadata,omitempty"`
 }
 
+type CohortDrilldownRequest struct {
+	CohortID  string   `json:"cohort_id"`
+	TenantID  string   `json:"tenant_id,omitempty"`
+	DSL       string   `json:"dsl"`
+	PatientID string   `json:"patient_id"`
+	Fields    []string `json:"fields,omitempty"`
+	Limit     int      `json:"limit,omitempty"`
+}
+
+type TimelineEvent struct {
+	PatientID    string                 `json:"patient_id"`
+	ResourceType string                 `json:"resource_type"`
+	Concept      interface{}            `json:"concept,omitempty"`
+	Unit         interface{}            `json:"unit,omitempty"`
+	Value        interface{}            `json:"value,omitempty"`
+	Timestamp    time.Time              `json:"timestamp"`
+	Codes        map[string]interface{} `json:"codes,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+}
+
+type LinkedPatient struct {
+	PatientID  string                 `json:"patient_id"`
+	Score      float64                `json:"score"`
+	Method     string                 `json:"method"`
+	Attributes map[string]interface{} `json:"attributes,omitempty"`
+}
+
+type LinkageSummary struct {
+	MasterPatientID string          `json:"master_patient_id"`
+	PrimaryScore    float64         `json:"primary_score"`
+	Method          string          `json:"method"`
+	LinkedPatients  []LinkedPatient `json:"linked_patients"`
+}
+
+type CohortDrilldown struct {
+	CohortID        string                 `json:"cohort_id"`
+	PatientID       string                 `json:"patient_id"`
+	MasterPatientID string                 `json:"master_patient_id,omitempty"`
+	Timeline        []TimelineEvent        `json:"timeline"`
+	Features        map[string]interface{} `json:"features,omitempty"`
+	Linkage         *LinkageSummary        `json:"linkage,omitempty"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
+}
+
 // Feature Store
 type Feature struct {
 	Name      string                 `json:"name"`
