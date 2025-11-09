@@ -3,7 +3,7 @@ services:
     name: synaptica-redis
     plan: free
 
-  - type: docker
+  - type: private_service
     name: synaptica-zookeeper
     plan: starter
     dockerfilePath: deploy/render/zookeeper.Dockerfile
@@ -13,7 +13,7 @@ services:
       - key: ZOOKEEPER_TICK_TIME
         value: "2000"
 
-  - type: docker
+  - type: private_service
     name: synaptica-kafka
     plan: starter
     dockerfilePath: deploy/render/kafka.Dockerfile
