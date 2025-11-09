@@ -1,0 +1,437 @@
+services:
+  - type: redis
+    name: synaptica-redis
+    plan: free
+
+  - type: docker
+    name: synaptica-zookeeper
+    plan: starter
+    dockerfilePath: deploy/render/zookeeper.Dockerfile
+    envVars:
+      - key: ZOOKEEPER_CLIENT_PORT
+        value: "2181"
+      - key: ZOOKEEPER_TICK_TIME
+        value: "2000"
+
+  - type: docker
+    name: synaptica-kafka
+    plan: starter
+    dockerfilePath: deploy/render/kafka.Dockerfile
+    envVars:
+      - key: KAFKA_BROKER_ID
+        value: "1"
+      - key: KAFKA_ZOOKEEPER_CONNECT
+        value: synaptica-zookeeper:2181
+      - key: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+        value: PLAINTEXT:PLAINTEXT
+      - key: KAFKA_ADVERTISED_LISTENERS
+        value: PLAINTEXT://synaptica-kafka:9092
+      - key: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+        value: "1"
+    dependsOn:
+      - synaptica-zookeeper
+
+  - type: privateService
+    name: ingestion-service
+    dockerfilePath: infra/docker/go.Dockerfile
+    envVars:
+      - key: SERVICE_PATH
+        value: ingestion-service
+      - key: SERVER_HOST
+        value: 0.0.0.0
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: synaptica-db
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: synaptica-db
+          property: port
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: synaptica-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: synaptica-db
+          property: password
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: synaptica-db
+          property: database
+      - key: KAFKA_BROKERS
+        value: synaptica-kafka:9092
+      - key: INGESTION_KAFKA_TOPIC
+        value: upstream-events
+      - key: INGESTION_DLQ_TOPIC
+        value: upstream-events-dlq
+    dependsOn:
+      - synaptica-db
+      - synaptica-kafka
+
+  - type: privateService
+    name: dlp-service
+    dockerfilePath: infra/docker/go.Dockerfile
+    envVars:
+      - key: SERVICE_PATH
+        value: dlp-service
+      - key: SERVER_HOST
+        value: 0.0.0.0
+      - key: KAFKA_BROKERS
+        value: synaptica-kafka:9092
+      - key: LINKAGE_KAFKA_TOPIC
+        value: linked-events
+      - key: DLP_RULES_PATH
+        value: /app/configs/dlp_rules.yaml
+    dependsOn:
+      - synaptica-kafka
+
+  - type: privateService
+    name: deid-service
+    dockerfilePath: infra/docker/go.Dockerfile
+    envVars:
+      - key: SERVICE_PATH
+        value: deid-service
+      - key: SERVER_HOST
+        value: 0.0.0.0
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: synaptica-db
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: synaptica-db
+          property: port
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: synaptica-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: synaptica-db
+          property: password
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: synaptica-db
+          property: database
+      - key: KAFKA_BROKERS
+        value: synaptica-kafka:9092
+    dependsOn:
+      - synaptica-db
+      - synaptica-kafka
+
+  - type: privateService
+    name: normalizer-service
+    dockerfilePath: infra/docker/go.Dockerfile
+    envVars:
+      - key: SERVICE_PATH
+        value: normalizer-service
+      - key: SERVER_HOST
+        value: 0.0.0.0
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: synaptica-db
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: synaptica-db
+          property: port
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: synaptica-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: synaptica-db
+          property: password
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: synaptica-db
+          property: database
+      - key: KAFKA_BROKERS
+        value: synaptica-kafka:9092
+      - key: TERMINOLOGY_CATALOG_PATH
+        value: /app/configs/terminology.yaml
+    dependsOn:
+      - synaptica-db
+      - synaptica-kafka
+
+  - type: privateService
+    name: linkage-service
+    dockerfilePath: infra/docker/go.Dockerfile
+    envVars:
+      - key: SERVICE_PATH
+        value: linkage-service
+      - key: SERVER_HOST
+        value: 0.0.0.0
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: synaptica-db
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: synaptica-db
+          property: port
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: synaptica-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: synaptica-db
+          property: password
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: synaptica-db
+          property: database
+      - key: KAFKA_BROKERS
+        value: synaptica-kafka:9092
+    dependsOn:
+      - synaptica-db
+      - synaptica-kafka
+
+  - type: privateService
+    name: storage-service
+    dockerfilePath: infra/docker/go.Dockerfile
+    envVars:
+      - key: SERVICE_PATH
+        value: storage-service
+      - key: SERVER_HOST
+        value: 0.0.0.0
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: synaptica-db
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: synaptica-db
+          property: port
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: synaptica-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: synaptica-db
+          property: password
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: synaptica-db
+          property: database
+      - key: REDIS_HOST
+        fromService:
+          name: synaptica-redis
+          type: redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          name: synaptica-redis
+          type: redis
+          property: port
+      - key: KAFKA_BROKERS
+        value: synaptica-kafka:9092
+    dependsOn:
+      - synaptica-db
+      - synaptica-redis
+      - synaptica-kafka
+
+  - type: privateService
+    name: training-service
+    dockerfilePath: infra/docker/go.Dockerfile
+    envVars:
+      - key: SERVICE_PATH
+        value: training-service
+      - key: SERVER_HOST
+        value: 0.0.0.0
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: synaptica-db
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: synaptica-db
+          property: port
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: synaptica-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: synaptica-db
+          property: password
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: synaptica-db
+          property: database
+      - key: REDIS_HOST
+        fromService:
+          name: synaptica-redis
+          type: redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          name: synaptica-redis
+          type: redis
+          property: port
+      - key: TRAINING_ARTIFACT_DIR
+        value: /data/artifacts
+    dependsOn:
+      - synaptica-db
+      - synaptica-redis
+
+  - type: privateService
+    name: serving-service
+    dockerfilePath: infra/docker/go.Dockerfile
+    envVars:
+      - key: SERVICE_PATH
+        value: serving-service
+      - key: SERVER_HOST
+        value: 0.0.0.0
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: synaptica-db
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: synaptica-db
+          property: port
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: synaptica-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: synaptica-db
+          property: password
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: synaptica-db
+          property: database
+      - key: REDIS_HOST
+        fromService:
+          name: synaptica-redis
+          type: redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          name: synaptica-redis
+          type: redis
+          property: port
+    dependsOn:
+      - synaptica-db
+      - synaptica-redis
+
+  - type: privateService
+    name: cohort-service
+    dockerfilePath: infra/docker/go.Dockerfile
+    envVars:
+      - key: SERVICE_PATH
+        value: cohort-service
+      - key: SERVER_HOST
+        value: 0.0.0.0
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: synaptica-db
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: synaptica-db
+          property: port
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: synaptica-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: synaptica-db
+          property: password
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: synaptica-db
+          property: database
+    dependsOn:
+      - synaptica-db
+
+  - type: privateService
+    name: api-gateway
+    dockerfilePath: infra/docker/go.Dockerfile
+    envVars:
+      - key: SERVICE_PATH
+        value: api-gateway
+      - key: SERVER_HOST
+        value: 0.0.0.0
+      - key: SERVER_PORT
+        value: "8080"
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: synaptica-db
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: synaptica-db
+          property: port
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: synaptica-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: synaptica-db
+          property: password
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: synaptica-db
+          property: database
+      - key: REDIS_HOST
+        fromService:
+          name: synaptica-redis
+          type: redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          name: synaptica-redis
+          type: redis
+          property: port
+      - key: KAFKA_BROKERS
+        value: synaptica-kafka:9092
+      - key: INGESTION_BASE_URL
+        value: http://ingestion-service:8081
+      - key: TRAINING_BASE_URL
+        value: http://training-service:8088
+    dependsOn:
+      - synaptica-db
+      - synaptica-redis
+      - synaptica-kafka
+      - ingestion-service
+      - training-service
+      - dlp-service
+      - deid-service
+      - normalizer-service
+      - linkage-service
+      - storage-service
+      - serving-service
+      - cohort-service
+
+  - type: privateService
+    name: frontend
+    dockerfilePath: frontend/Dockerfile
+    envVars:
+      - key: NEXT_PUBLIC_API_BASE
+        value: /api
+    dependsOn:
+      - api-gateway
+
+  - type: web
+    name: synaptica-edge
+    dockerfilePath: deploy/render/nginx.Dockerfile
+    envVars:
+      - key: PORT
+        value: "80"
+    plan: starter
+    dependsOn:
+      - frontend
+      - api-gateway
+
+databases:
+  - name: synaptica-db
+    plan: free
