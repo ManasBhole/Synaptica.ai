@@ -428,6 +428,59 @@ func (r *Repository) CreateVisitTemplate(ctx context.Context, studyID uuid.UUID,
 	}, nil
 }
 
+func (r *Repository) CreateConsentVersion(ctx context.Context, studyID uuid.UUID, req models.CreateConsentVersionRequest) (models.ConsentVersion, error) {
+	entry := &consentVersionModel{
+		ID:           uuid.New(),
+		StudyID:      studyID,
+		Version:      req.Version,
+		Title:        req.Title,
+		Summary:      req.Summary,
+		DocumentURL:  req.DocumentURL,
+		EffectiveAt:  req.EffectiveAt,
+		SupersededAt: req.SupersededAt,
+		CreatedAt:    time.Now().UTC(),
+	}
+	if err := r.db.WithContext(ctx).Create(entry).Error; err != nil {
+		return models.ConsentVersion{}, err
+	}
+	return models.ConsentVersion{
+		ID:           entry.ID,
+		StudyID:      entry.StudyID,
+		Version:      entry.Version,
+		Title:        entry.Title,
+		Summary:      entry.Summary,
+		DocumentURL:  entry.DocumentURL,
+		EffectiveAt:  entry.EffectiveAt,
+		SupersededAt: entry.SupersededAt,
+		CreatedAt:    entry.CreatedAt,
+	}, nil
+}
+
+func (r *Repository) ListConsentVersions(ctx context.Context, studyID uuid.UUID, limit int) ([]models.ConsentVersion, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	var rows []consentVersionModel
+	if err := r.db.WithContext(ctx).Where("study_id = ?", studyID).Order("effective_at DESC").Limit(limit).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	versions := make([]models.ConsentVersion, 0, len(rows))
+	for _, row := range rows {
+		versions = append(versions, models.ConsentVersion{
+			ID:           row.ID,
+			StudyID:      row.StudyID,
+			Version:      row.Version,
+			Title:        row.Title,
+			Summary:      row.Summary,
+			DocumentURL:  row.DocumentURL,
+			EffectiveAt:  row.EffectiveAt,
+			SupersededAt: row.SupersededAt,
+			CreatedAt:    row.CreatedAt,
+		})
+	}
+	return versions, nil
+}
+
 func (r *Repository) EnrollSubject(ctx context.Context, studyID uuid.UUID, req models.EnrollSubjectRequest) (models.Subject, error) {
 	subject := &subjectModel{
 		ID:               uuid.New(),

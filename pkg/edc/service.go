@@ -102,6 +102,29 @@ func (s *Service) CreateVisitTemplate(ctx context.Context, studyID uuid.UUID, re
 	return visit, nil
 }
 
+func (s *Service) CreateConsentVersion(ctx context.Context, studyID uuid.UUID, req models.CreateConsentVersionRequest, actor string) (models.ConsentVersion, error) {
+	version, err := s.repo.CreateConsentVersion(ctx, studyID, req)
+	if err != nil {
+		return models.ConsentVersion{}, err
+	}
+	_ = s.log(ctx, models.AuditLog{
+		StudyID:  studyID,
+		Actor:    actor,
+		Action:   "consent_version_created",
+		Entity:   "consent_version",
+		EntityID: version.ID.String(),
+		Payload: map[string]interface{}{
+			"version":      version.Version,
+			"effective_at": version.EffectiveAt,
+		},
+	})
+	return version, nil
+}
+
+func (s *Service) ListConsentVersions(ctx context.Context, studyID uuid.UUID, limit int) ([]models.ConsentVersion, error) {
+	return s.repo.ListConsentVersions(ctx, studyID, limit)
+}
+
 func (s *Service) EnrollSubject(ctx context.Context, studyID uuid.UUID, req models.EnrollSubjectRequest, actor string) (models.Subject, error) {
 	subject, err := s.repo.EnrollSubject(ctx, studyID, req)
 	if err != nil {

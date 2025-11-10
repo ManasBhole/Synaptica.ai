@@ -29,6 +29,8 @@ func (h *Handler) Register(r *mux.Router) {
 	r.HandleFunc("/studies/{id}/visits", h.handleCreateVisitTemplate).Methods(http.MethodPost)
 	r.HandleFunc("/studies/{id}/subjects", h.handleEnrollSubject).Methods(http.MethodPost)
 	r.HandleFunc("/studies/{id}/subjects", h.handleListSubjects).Methods(http.MethodGet)
+	r.HandleFunc("/studies/{id}/consents", h.handleCreateConsentVersion).Methods(http.MethodPost)
+	r.HandleFunc("/studies/{id}/consents", h.handleListConsentVersions).Methods(http.MethodGet)
 	r.HandleFunc("/studies/{id}/audit", h.handleListAuditLogs).Methods(http.MethodGet)
 	r.HandleFunc("/subjects/{id}/consents", h.handleRecordConsent).Methods(http.MethodPost)
 }
@@ -211,6 +213,46 @@ func (h *Handler) handleListSubjects(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"items": subjects})
+}
+
+func (h *Handler) handleCreateConsentVersion(w http.ResponseWriter, r *http.Request) {
+	studyID, err := uuid.Parse(mux.Vars(r)["id"])
+	if err != nil {
+		http.Error(w, "invalid study id", http.StatusBadRequest)
+		return
+	}
+	var req models.CreateConsentVersionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	if req.Version == "" {
+		http.Error(w, "version is required", http.StatusBadRequest)
+		return
+	}
+	version, err := h.service.CreateConsentVersion(r.Context(), studyID, req, resolveActor(r))
+	if err != nil {
+		logger.Log.WithError(err).Error("failed to create consent version")
+		http.Error(w, "failed to create consent version", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]interface{}{"version": version})
+}
+
+func (h *Handler) handleListConsentVersions(w http.ResponseWriter, r *http.Request) {
+	studyID, err := uuid.Parse(mux.Vars(r)["id"])
+	if err != nil {
+		http.Error(w, "invalid study id", http.StatusBadRequest)
+		return
+	}
+	limit := parseLimit(r, 50)
+	versions, err := h.service.ListConsentVersions(r.Context(), studyID, limit)
+	if err != nil {
+		logger.Log.WithError(err).Error("failed to list consent versions")
+		http.Error(w, "failed to list consent versions", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"items": versions})
 }
 
 func (h *Handler) handleRecordConsent(w http.ResponseWriter, r *http.Request) {

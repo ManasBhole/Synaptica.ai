@@ -6,6 +6,7 @@ import Link from "next/link";
 
 const titles: Record<string, string> = {
   "/": "Unified Intelligence Snapshot",
+  "/studies": "Study Orchestration & EDC",
   "/cohort": "Cohort Analytics Workbench",
   "/privacy": "Privacy & DLP Posture",
   "/pipeline": "Data Pipelines & Observability",
@@ -15,7 +16,8 @@ const titles: Record<string, string> = {
 
 export const Topbar = () => {
   const pathname = usePathname();
-  const title = titles[pathname] ?? "Synaptica Platform";
+  const normalized = pathname.startsWith("/studies/") ? "/studies" : pathname;
+  const title = titles[normalized] ?? "Synaptica Platform";
 
   return (
     <header className="flex items-center justify-between border-b border-white/5 bg-surface-raised/60 px-8 py-6 backdrop-blur-xl shadow-[rgba(15,23,42,0.35)_0px_10px_35px_-25px]">

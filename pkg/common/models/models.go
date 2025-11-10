@@ -412,6 +412,16 @@ type EnrollSubjectRequest struct {
 	Demographics     map[string]interface{} `json:"demographics,omitempty"`
 }
 
+type CreateConsentVersionRequest struct {
+	Version      string                 `json:"version"`
+	Title        string                 `json:"title,omitempty"`
+	Summary      string                 `json:"summary,omitempty"`
+	DocumentURL  string                 `json:"document_url,omitempty"`
+	EffectiveAt  time.Time              `json:"effective_at"`
+	SupersededAt *time.Time             `json:"superseded_at,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+}
+
 type ConsentSignatureRequest struct {
 	ConsentVersionID uuid.UUID              `json:"consent_version_id"`
 	SignedAt         time.Time              `json:"signed_at"`
