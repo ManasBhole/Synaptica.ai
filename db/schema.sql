@@ -66,11 +66,22 @@ CREATE TABLE IF NOT EXISTS training_jobs (
     metrics JSONB,
     artifact_path TEXT,
     error_message TEXT,
+    promoted BOOLEAN NOT NULL DEFAULT FALSE,
+    promoted_at TIMESTAMPTZ,
+    promoted_by TEXT,
+    promotion_notes TEXT,
+    deployment_target TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     started_at TIMESTAMPTZ,
     completed_at TIMESTAMPTZ
 );
+
+ALTER TABLE training_jobs ADD COLUMN IF NOT EXISTS promoted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE training_jobs ADD COLUMN IF NOT EXISTS promoted_at TIMESTAMPTZ;
+ALTER TABLE training_jobs ADD COLUMN IF NOT EXISTS promoted_by TEXT;
+ALTER TABLE training_jobs ADD COLUMN IF NOT EXISTS promotion_notes TEXT;
+ALTER TABLE training_jobs ADD COLUMN IF NOT EXISTS deployment_target TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_training_jobs_status ON training_jobs(status);
 CREATE INDEX IF NOT EXISTS idx_training_jobs_model ON training_jobs(model_type);

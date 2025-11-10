@@ -28,6 +28,12 @@ type Service struct {
 	delay        time.Duration
 }
 
+type PromotionInput struct {
+	PromotedBy       string
+	Notes            string
+	DeploymentTarget string
+}
+
 func NewService(repo *Repository, lakehouse *storage.LakehouseWriter, featureStore *storage.FeatureStore, artifactDir string, maxWorkers int, delay time.Duration) (*Service, error) {
 	s := &Service{
 		repo:         repo,
@@ -83,6 +89,28 @@ func (s *Service) List(ctx context.Context, limit int) ([]models.TrainingJob, er
 		results = append(results, toDomain(&copy))
 	}
 	return results, nil
+}
+
+func (s *Service) Promote(ctx context.Context, jobID uuid.UUID, input PromotionInput) (models.TrainingJob, error) {
+	if err := s.repo.SetPromotion(ctx, jobID, true, input.PromotedBy, input.Notes, input.DeploymentTarget); err != nil {
+		return models.TrainingJob{}, err
+	}
+	job, err := s.repo.Get(ctx, jobID)
+	if err != nil {
+		return models.TrainingJob{}, err
+	}
+	return toDomain(job), nil
+}
+
+func (s *Service) Deprecate(ctx context.Context, jobID uuid.UUID, notes string) (models.TrainingJob, error) {
+	if err := s.repo.SetPromotion(ctx, jobID, false, "", notes, ""); err != nil {
+		return models.TrainingJob{}, err
+	}
+	job, err := s.repo.Get(ctx, jobID)
+	if err != nil {
+		return models.TrainingJob{}, err
+	}
+	return toDomain(job), nil
 }
 
 func (s *Service) GetArtifact(id uuid.UUID) (Artifact, error) {
@@ -210,20 +238,29 @@ func (s *Service) writeArtifact(jobID uuid.UUID, input CreateJobInput, metrics m
 
 func toDomain(job *JobModel) models.TrainingJob {
 	result := models.TrainingJob{
-		ID:           job.ID,
-		ModelType:    job.ModelType,
-		Status:       job.Status,
-		CreatedAt:    job.CreatedAt,
-		StartedAt:    job.StartedAt,
-		CompletedAt:  job.CompletedAt,
-		ArtifactPath: job.ArtifactPath,
-		ErrorMessage: job.ErrorMessage,
+		ID:               job.ID,
+		ModelType:        job.ModelType,
+		Status:           job.Status,
+		CreatedAt:        job.CreatedAt,
+		StartedAt:        job.StartedAt,
+		CompletedAt:      job.CompletedAt,
+		ArtifactPath:     job.ArtifactPath,
+		ErrorMessage:     job.ErrorMessage,
+		Promoted:         job.Promoted,
+		PromotionNotes:   job.PromotionNotes,
+		DeploymentTarget: job.DeploymentTarget,
 	}
 	if job.Config != nil {
 		result.Config = map[string]interface{}(job.Config)
 	}
 	if job.Metrics != nil {
 		result.Metrics = map[string]interface{}(job.Metrics)
+	}
+	if job.PromotedAt != nil {
+		result.PromotedAt = job.PromotedAt
+	}
+	if job.PromotedBy != nil {
+		result.PromotedBy = *job.PromotedBy
 	}
 	return result
 }

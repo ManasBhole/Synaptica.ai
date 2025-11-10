@@ -33,6 +33,8 @@ func RegisterTrainingRoutes(router *mux.Router, proxy *TrainingProxy) {
 	router.HandleFunc("/training/jobs/{id}", proxy.handleGetJob).Methods(http.MethodGet)
 	router.HandleFunc("/training/jobs/{id}/status", proxy.handleGetJob).Methods(http.MethodGet)
 	router.HandleFunc("/training/jobs/{id}/artifact", proxy.handleArtifact).Methods(http.MethodGet)
+	router.HandleFunc("/training/jobs/{id}/promote", proxy.handlePromote).Methods(http.MethodPost)
+	router.HandleFunc("/training/jobs/{id}/deprecate", proxy.handleDeprecate).Methods(http.MethodPost)
 }
 
 func (p *TrainingProxy) handleCreateJob(w http.ResponseWriter, r *http.Request) {
@@ -54,6 +56,18 @@ func (p *TrainingProxy) handleArtifact(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	endpoint := fmt.Sprintf("%s/api/v1/training/jobs/%s/artifact", p.Cfg.TrainingBaseURL, id)
 	p.forwardWithQuery(w, r, http.MethodGet, endpoint)
+}
+
+func (p *TrainingProxy) handlePromote(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	endpoint := fmt.Sprintf("%s/api/v1/training/jobs/%s/promote", p.Cfg.TrainingBaseURL, id)
+	p.forwardWithBody(w, r, http.MethodPost, endpoint)
+}
+
+func (p *TrainingProxy) handleDeprecate(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	endpoint := fmt.Sprintf("%s/api/v1/training/jobs/%s/deprecate", p.Cfg.TrainingBaseURL, id)
+	p.forwardWithBody(w, r, http.MethodPost, endpoint)
 }
 
 func (p *TrainingProxy) forwardWithQuery(w http.ResponseWriter, r *http.Request, method, target string) {

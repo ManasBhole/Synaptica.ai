@@ -172,16 +172,21 @@ type FeatureSet struct {
 
 // Model Training
 type TrainingJob struct {
-	ID           uuid.UUID              `json:"id"`
-	ModelType    string                 `json:"model_type"`
-	Config       map[string]interface{} `json:"config"`
-	Status       string                 `json:"status"`
-	CreatedAt    time.Time              `json:"created_at"`
-	StartedAt    *time.Time             `json:"started_at,omitempty"`
-	CompletedAt  *time.Time             `json:"completed_at,omitempty"`
-	Metrics      map[string]interface{} `json:"metrics,omitempty"`
-	ArtifactPath string                 `json:"artifact_path,omitempty"`
-	ErrorMessage string                 `json:"error_message,omitempty"`
+	ID              uuid.UUID              `json:"id"`
+	ModelType       string                 `json:"model_type"`
+	Config          map[string]interface{} `json:"config"`
+	Status          string                 `json:"status"`
+	CreatedAt       time.Time              `json:"created_at"`
+	StartedAt       *time.Time             `json:"started_at,omitempty"`
+	CompletedAt     *time.Time             `json:"completed_at,omitempty"`
+	Metrics         map[string]interface{} `json:"metrics,omitempty"`
+	ArtifactPath    string                 `json:"artifact_path,omitempty"`
+	ErrorMessage    string                 `json:"error_message,omitempty"`
+	Promoted        bool                   `json:"promoted"`
+	PromotedAt      *time.Time             `json:"promoted_at,omitempty"`
+	PromotedBy      string                 `json:"promoted_by,omitempty"`
+	PromotionNotes  string                 `json:"promotion_notes,omitempty"`
+	DeploymentTarget string                `json:"deployment_target,omitempty"`
 }
 
 // Model Serving

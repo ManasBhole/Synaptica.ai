@@ -74,13 +74,41 @@ export interface TrainingJobSummary {
   status: string;
   createdAt: ISODateString;
   completedAt?: ISODateString;
+  metrics?: Record<string, unknown>;
+  artifactPath?: string;
+  errorMessage?: string;
+  promoted: boolean;
+  promotedAt?: ISODateString;
+  promotedBy?: string;
+  promotionNotes?: string;
+  deploymentTarget?: string;
   accuracy?: number;
   loss?: number;
 }
 
 export async function listTrainingJobs(limit = 10): Promise<TrainingJobSummary[]> {
   const { data } = await api.get<{ jobs: TrainingJobSummary[] }>("/api/v1/training/jobs", { params: { limit } });
-  return data.jobs;
+  return data.jobs.map((job) => {
+    const metrics = typeof job.metrics === "object" && job.metrics !== null ? (job.metrics as Record<string, unknown>) : undefined;
+    const accuracy = typeof metrics?.accuracy === "number" ? (metrics?.accuracy as number) : job.accuracy;
+    const loss = typeof metrics?.loss === "number" ? (metrics?.loss as number) : job.loss;
+    return {
+      ...job,
+      accuracy,
+      loss
+    };
+  });
+}
+
+export async function promoteTrainingJob(
+  id: string,
+  payload: { promoted_by?: string; notes?: string; deployment_target?: string }
+): Promise<void> {
+  await api.post(`/api/v1/training/jobs/${id}/promote`, payload);
+}
+
+export async function deprecateTrainingJob(id: string, payload: { notes?: string }): Promise<void> {
+  await api.post(`/api/v1/training/jobs/${id}/deprecate`, payload);
 }
 
 export interface PredictionLatencyPoint {

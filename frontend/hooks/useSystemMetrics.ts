@@ -63,6 +63,11 @@ const fallbackJobs: TrainingJobSummary[] = [
     status: "completed",
     createdAt: new Date(Date.now() - 45 * 60_000).toISOString(),
     completedAt: new Date().toISOString(),
+    promoted: true,
+    promotedAt: new Date().toISOString(),
+    promotedBy: "ops@demo",
+    promotionNotes: "Auto approved",
+    metrics: { accuracy: 0.87, loss: 0.42 },
     accuracy: 0.87,
     loss: 0.42
   }

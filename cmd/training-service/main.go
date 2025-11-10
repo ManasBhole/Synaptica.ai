@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -70,6 +71,8 @@ func main() {
 	router.HandleFunc("/api/v1/training/jobs/{id}", app.handleGetJob).Methods(http.MethodGet)
 	router.HandleFunc("/api/v1/training/jobs/{id}/status", app.handleGetJob).Methods(http.MethodGet)
 	router.HandleFunc("/api/v1/training/jobs/{id}/artifact", app.handleArtifact).Methods(http.MethodGet)
+	router.HandleFunc("/api/v1/training/jobs/{id}/promote", app.handlePromoteJob).Methods(http.MethodPost)
+	router.HandleFunc("/api/v1/training/jobs/{id}/deprecate", app.handleDeprecateJob).Methods(http.MethodPost)
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf("%s:%s", cfg.ServerHost, "8088"),
@@ -197,6 +200,62 @@ func (a *TrainingApp) handleArtifact(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(content)
+}
+
+func (a *TrainingApp) handlePromoteJob(w http.ResponseWriter, r *http.Request) {
+	jobID, err := parseJobID(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		PromotedBy       string `json:"promoted_by"`
+		Notes            string `json:"notes"`
+		DeploymentTarget string `json:"deployment_target"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	job, err := a.service.Promote(r.Context(), jobID, training.PromotionInput{
+		PromotedBy:       req.PromotedBy,
+		Notes:            req.Notes,
+		DeploymentTarget: req.DeploymentTarget,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(job)
+}
+
+func (a *TrainingApp) handleDeprecateJob(w http.ResponseWriter, r *http.Request) {
+	jobID, err := parseJobID(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Notes string `json:"notes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	job, err := a.service.Deprecate(r.Context(), jobID, req.Notes)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(job)
 }
 
 func parseJobID(r *http.Request) (uuid.UUID, error) {

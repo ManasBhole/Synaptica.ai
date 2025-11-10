@@ -15,18 +15,23 @@ const (
 )
 
 type JobModel struct {
-	ID           uuid.UUID         `gorm:"type:uuid;primaryKey;column:id"`
-	ModelType    string            `gorm:"column:model_type"`
-	Config       datatypes.JSONMap `gorm:"column:config"`
-	Filters      datatypes.JSONMap `gorm:"column:filters"`
-	Status       string            `gorm:"column:status"`
-	Metrics      datatypes.JSONMap `gorm:"column:metrics"`
-	ArtifactPath string            `gorm:"column:artifact_path"`
-	ErrorMessage string            `gorm:"column:error_message"`
-	CreatedAt    time.Time         `gorm:"column:created_at"`
-	UpdatedAt    time.Time         `gorm:"column:updated_at"`
-	StartedAt    *time.Time        `gorm:"column:started_at"`
-	CompletedAt  *time.Time        `gorm:"column:completed_at"`
+	ID               uuid.UUID         `gorm:"type:uuid;primaryKey;column:id"`
+	ModelType        string            `gorm:"column:model_type"`
+	Config           datatypes.JSONMap `gorm:"column:config"`
+	Filters          datatypes.JSONMap `gorm:"column:filters"`
+	Status           string            `gorm:"column:status"`
+	Metrics          datatypes.JSONMap `gorm:"column:metrics"`
+	ArtifactPath     string            `gorm:"column:artifact_path"`
+	ErrorMessage     string            `gorm:"column:error_message"`
+	Promoted         bool              `gorm:"column:promoted"`
+	PromotedAt       *time.Time        `gorm:"column:promoted_at"`
+	PromotedBy       *string           `gorm:"column:promoted_by"`
+	PromotionNotes   string            `gorm:"column:promotion_notes"`
+	DeploymentTarget string            `gorm:"column:deployment_target"`
+	CreatedAt        time.Time         `gorm:"column:created_at"`
+	UpdatedAt        time.Time         `gorm:"column:updated_at"`
+	StartedAt        *time.Time        `gorm:"column:started_at"`
+	CompletedAt      *time.Time        `gorm:"column:completed_at"`
 }
 
 func (JobModel) TableName() string {

@@ -45,6 +45,29 @@ func (r *Repository) UpdateStatus(ctx context.Context, jobID uuid.UUID, status s
 	return r.db.WithContext(ctx).Model(&JobModel{}).Where("id = ?", jobID).Updates(updates).Error
 }
 
+func (r *Repository) SetPromotion(ctx context.Context, jobID uuid.UUID, promoted bool, promotedBy, notes, target string) error {
+	updates := map[string]interface{}{
+		"promoted":          promoted,
+		"promotion_notes":   notes,
+		"deployment_target": target,
+		"updated_at":        time.Now().UTC(),
+	}
+	if promoted {
+		updates["promoted_at"] = time.Now().UTC()
+	} else {
+		updates["promoted_at"] = gorm.Expr("NULL")
+	}
+	if promotedBy != "" {
+		updates["promoted_by"] = promotedBy
+	} else {
+		updates["promoted_by"] = gorm.Expr("NULL")
+	}
+	if target == "" {
+		updates["deployment_target"] = gorm.Expr("NULL")
+	}
+	return r.db.WithContext(ctx).Model(&JobModel{}).Where("id = ?", jobID).Updates(updates).Error
+}
+
 func (r *Repository) SetTimestamps(ctx context.Context, jobID uuid.UUID, startedAt, completedAt *time.Time) error {
 	updates := map[string]interface{}{"updated_at": time.Now().UTC()}
 	if startedAt != nil {

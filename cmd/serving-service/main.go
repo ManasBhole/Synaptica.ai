@@ -226,11 +226,11 @@ func toFloat(value interface{}) (float64, error) {
 }
 
 type predictionSummary struct {
-	Total          int     `json:"total"`
-	WindowSeconds  int64   `json:"windowSeconds"`
-	P50LatencyMs   float64 `json:"p50LatencyMs"`
-	P95LatencyMs   float64 `json:"p95LatencyMs"`
-	AverageLatency float64 `json:"averageLatencyMs"`
+	Total             int     `json:"total"`
+	WindowSeconds     int64   `json:"windowSeconds"`
+	P50LatencyMs      float64 `json:"p50LatencyMs"`
+	P95LatencyMs      float64 `json:"p95LatencyMs"`
+	AverageLatency    float64 `json:"averageLatencyMs"`
 	AverageConfidence float64 `json:"averageConfidence"`
 }
 
@@ -298,11 +298,11 @@ func buildPredictionMetrics(logs []serving.PredictionLog) predictionMetricsRespo
 	avgConfidence := confidences / float64(len(logs))
 
 	summary := predictionSummary{
-		Total:           len(logs),
-		WindowSeconds:   int64(newest.Sub(oldest).Seconds()),
-		P50LatencyMs:    p50,
-		P95LatencyMs:    p95,
-		AverageLatency:  avgLatency,
+		Total:             len(logs),
+		WindowSeconds:     int64(newest.Sub(oldest).Seconds()),
+		P50LatencyMs:      p50,
+		P95LatencyMs:      p95,
+		AverageLatency:    avgLatency,
 		AverageConfidence: avgConfidence,
 	}
 
