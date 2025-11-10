@@ -353,6 +353,39 @@ services:
       - synaptica-db
 
   - type: privateService
+    name: edc-service
+    dockerfilePath: infra/docker/go.Dockerfile
+    envVars:
+      - key: SERVICE_PATH
+        value: edc-service
+      - key: SERVER_HOST
+        value: 0.0.0.0
+      - key: EDC_SERVICE_PORT
+        value: "8091"
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: synaptica-db
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: synaptica-db
+          property: port
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: synaptica-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: synaptica-db
+          property: password
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: synaptica-db
+          property: database
+    dependsOn:
+      - synaptica-db
+
+  - type: privateService
     name: api-gateway
     dockerfilePath: infra/docker/go.Dockerfile
     envVars:
@@ -411,6 +444,7 @@ services:
       - storage-service
       - serving-service
       - cohort-service
+      - edc-service
 
   - type: privateService
     name: frontend

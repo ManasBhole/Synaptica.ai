@@ -14,6 +14,7 @@ import (
 	"github.com/synaptica-ai/platform/pkg/common/config"
 	"github.com/synaptica-ai/platform/pkg/common/database"
 	"github.com/synaptica-ai/platform/pkg/common/logger"
+	"github.com/synaptica-ai/platform/pkg/edc"
 	"github.com/synaptica-ai/platform/pkg/gateway/auth"
 	"github.com/synaptica-ai/platform/pkg/gateway/httpclient"
 	"github.com/synaptica-ai/platform/pkg/gateway/middleware"
@@ -92,18 +93,32 @@ func main() {
 	if err := templateRepo.AutoMigrate(); err != nil {
 		logger.Log.WithError(err).Warn("Failed to ensure cohort templates table")
 	}
+	materialRepo := cohort.NewMaterializationRepository(db)
+	if err := materialRepo.AutoMigrate(); err != nil {
+		logger.Log.WithError(err).Warn("Failed to ensure cohort materializations table")
+	}
 	cohortService := cohort.NewService(
 		lakehouse,
 		olap,
 		cohort.WithFeatureStore(featureStore),
 		cohort.WithLinkageRepository(linkageRepo),
 		cohort.WithTemplateRepository(templateRepo),
+		cohort.WithMaterializer(materialRepo, featureStore, cfg.FeatureMaterializeWorkers),
 	)
 	cohortHandler := routes.NewCohortHandler(cohortService)
 	cohortHandler.Register(apiRouter)
 
 	trainingProxy := routes.NewTrainingProxy(client, cfg)
 	routes.RegisterTrainingRoutes(apiRouter, trainingProxy)
+
+	edcRepo := edc.NewRepository(db)
+	if err := edcRepo.AutoMigrate(); err != nil {
+		logger.Log.WithError(err).Warn("Failed to ensure EDC tables")
+	}
+	edcService := edc.NewService(edcRepo)
+	edcHandler := edc.NewHandler(edcService)
+	edcRouter := apiRouter.PathPrefix("/edc").Subrouter()
+	edcHandler.Register(edcRouter)
 
 	// Server
 	server := &http.Server{

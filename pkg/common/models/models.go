@@ -244,3 +244,179 @@ type CleanRoomResult struct {
 	NoiseAdded   float64                `json:"noise_added"`
 	DPBudgetUsed float64                `json:"dp_budget_used"`
 }
+
+// EDC / Study Operations
+type Study struct {
+	ID              uuid.UUID              `json:"id"`
+	Code            string                 `json:"code"`
+	Name            string                 `json:"name"`
+	Phase           string                 `json:"phase,omitempty"`
+	TherapeuticArea string                 `json:"therapeutic_area,omitempty"`
+	Status          string                 `json:"status"`
+	Sponsor         string                 `json:"sponsor,omitempty"`
+	ProtocolSummary map[string]interface{} `json:"protocol_summary,omitempty"`
+	StartDate       *time.Time             `json:"start_date,omitempty"`
+	EndDate         *time.Time             `json:"end_date,omitempty"`
+	CreatedAt       time.Time              `json:"created_at"`
+	UpdatedAt       time.Time              `json:"updated_at"`
+	Sites           []StudySite            `json:"sites,omitempty"`
+	Forms           []StudyForm            `json:"forms,omitempty"`
+	VisitTemplates  []VisitTemplate        `json:"visit_templates,omitempty"`
+	ActiveSubjects  int                    `json:"active_subjects,omitempty"`
+	TotalSubjects   int                    `json:"total_subjects,omitempty"`
+}
+
+type StudySite struct {
+	ID                    uuid.UUID              `json:"id"`
+	StudyID               uuid.UUID              `json:"study_id"`
+	SiteCode              string                 `json:"site_code"`
+	Name                  string                 `json:"name"`
+	Country               string                 `json:"country,omitempty"`
+	PrincipalInvestigator string                 `json:"principal_investigator,omitempty"`
+	Status                string                 `json:"status"`
+	Contact               map[string]interface{} `json:"contact,omitempty"`
+	CreatedAt             time.Time              `json:"created_at"`
+}
+
+type StudyForm struct {
+	ID          uuid.UUID              `json:"id"`
+	StudyID     uuid.UUID              `json:"study_id"`
+	Name        string                 `json:"name"`
+	Slug        string                 `json:"slug"`
+	Version     int                    `json:"version"`
+	Description string                 `json:"description,omitempty"`
+	Schema      map[string]interface{} `json:"schema"`
+	Status      string                 `json:"status"`
+	CreatedAt   time.Time              `json:"created_at"`
+	UpdatedAt   time.Time              `json:"updated_at"`
+}
+
+type VisitTemplate struct {
+	ID              uuid.UUID `json:"id"`
+	StudyID         uuid.UUID `json:"study_id"`
+	Name            string    `json:"name"`
+	VisitOrder      int       `json:"visit_order"`
+	WindowStartDays *int      `json:"window_start_days,omitempty"`
+	WindowEndDays   *int      `json:"window_end_days,omitempty"`
+	Required        bool      `json:"required"`
+	Forms           []string  `json:"forms,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+type Subject struct {
+	ID               uuid.UUID              `json:"id"`
+	StudyID          uuid.UUID              `json:"study_id"`
+	SiteID           *uuid.UUID             `json:"site_id,omitempty"`
+	SubjectCode      string                 `json:"subject_code"`
+	Status           string                 `json:"status"`
+	RandomizationArm string                 `json:"randomization_arm,omitempty"`
+	ConsentedAt      *time.Time             `json:"consented_at,omitempty"`
+	Demographics     map[string]interface{} `json:"demographics,omitempty"`
+	CreatedAt        time.Time              `json:"created_at"`
+}
+
+type SubjectVisit struct {
+	ID              uuid.UUID              `json:"id"`
+	SubjectID       uuid.UUID              `json:"subject_id"`
+	VisitTemplateID uuid.UUID              `json:"visit_template_id"`
+	ScheduledDate   *time.Time             `json:"scheduled_date,omitempty"`
+	ActualDate      *time.Time             `json:"actual_date,omitempty"`
+	Status          string                 `json:"status"`
+	Forms           map[string]interface{} `json:"forms,omitempty"`
+	CreatedAt       time.Time              `json:"created_at"`
+	UpdatedAt       time.Time              `json:"updated_at"`
+}
+
+type ConsentVersion struct {
+	ID           uuid.UUID  `json:"id"`
+	StudyID      uuid.UUID  `json:"study_id"`
+	Version      string     `json:"version"`
+	Title        string     `json:"title,omitempty"`
+	Summary      string     `json:"summary,omitempty"`
+	DocumentURL  string     `json:"document_url,omitempty"`
+	EffectiveAt  time.Time  `json:"effective_at"`
+	SupersededAt *time.Time `json:"superseded_at,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+}
+
+type ConsentSignature struct {
+	ID               uuid.UUID              `json:"id"`
+	SubjectID        uuid.UUID              `json:"subject_id"`
+	ConsentVersionID uuid.UUID              `json:"consent_version_id"`
+	SignedAt         time.Time              `json:"signed_at"`
+	SignerName       string                 `json:"signer_name,omitempty"`
+	Method           string                 `json:"method,omitempty"`
+	IPAddress        string                 `json:"ip_address,omitempty"`
+	Metadata         map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt        time.Time              `json:"created_at"`
+}
+
+type AuditLog struct {
+	ID        int64                  `json:"id"`
+	StudyID   uuid.UUID              `json:"study_id"`
+	SubjectID *uuid.UUID             `json:"subject_id,omitempty"`
+	Actor     string                 `json:"actor"`
+	Role      string                 `json:"role,omitempty"`
+	Action    string                 `json:"action"`
+	Entity    string                 `json:"entity,omitempty"`
+	EntityID  string                 `json:"entity_id,omitempty"`
+	Payload   map[string]interface{} `json:"payload,omitempty"`
+	CreatedAt time.Time              `json:"created_at"`
+}
+
+type CreateStudyRequest struct {
+	Code            string                 `json:"code"`
+	Name            string                 `json:"name"`
+	Phase           string                 `json:"phase,omitempty"`
+	TherapeuticArea string                 `json:"therapeutic_area,omitempty"`
+	Sponsor         string                 `json:"sponsor,omitempty"`
+	ProtocolSummary map[string]interface{} `json:"protocol_summary,omitempty"`
+	StartDate       *time.Time             `json:"start_date,omitempty"`
+	EndDate         *time.Time             `json:"end_date,omitempty"`
+}
+
+type UpdateStudyStatusRequest struct {
+	Status string `json:"status"`
+}
+
+type CreateStudySiteRequest struct {
+	SiteCode              string                 `json:"site_code"`
+	Name                  string                 `json:"name"`
+	Country               string                 `json:"country,omitempty"`
+	PrincipalInvestigator string                 `json:"principal_investigator,omitempty"`
+	Contact               map[string]interface{} `json:"contact,omitempty"`
+}
+
+type CreateStudyFormRequest struct {
+	Name        string                 `json:"name"`
+	Slug        string                 `json:"slug"`
+	Description string                 `json:"description,omitempty"`
+	Schema      map[string]interface{} `json:"schema"`
+	Status      string                 `json:"status,omitempty"`
+}
+
+type CreateVisitTemplateRequest struct {
+	Name            string   `json:"name"`
+	VisitOrder      int      `json:"visit_order"`
+	WindowStartDays *int     `json:"window_start_days,omitempty"`
+	WindowEndDays   *int     `json:"window_end_days,omitempty"`
+	Required        *bool    `json:"required,omitempty"`
+	Forms           []string `json:"forms,omitempty"`
+}
+
+type EnrollSubjectRequest struct {
+	SiteID           *uuid.UUID             `json:"site_id,omitempty"`
+	SubjectCode      string                 `json:"subject_code"`
+	RandomizationArm string                 `json:"randomization_arm,omitempty"`
+	Demographics     map[string]interface{} `json:"demographics,omitempty"`
+}
+
+type ConsentSignatureRequest struct {
+	ConsentVersionID uuid.UUID              `json:"consent_version_id"`
+	SignedAt         time.Time              `json:"signed_at"`
+	SignerName       string                 `json:"signer_name,omitempty"`
+	Method           string                 `json:"method,omitempty"`
+	IPAddress        string                 `json:"ip_address,omitempty"`
+	Metadata         map[string]interface{} `json:"metadata,omitempty"`
+}

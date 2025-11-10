@@ -58,6 +58,9 @@ type Config struct {
 	GatewayRateLimitRPS   int
 	GatewayRateLimitBurst int
 
+	// EDC Service
+	EDCServicePort string
+
 	// Ingestion specific
 	IngestionAllowedSources []string
 	IngestionKafkaTopic     string
@@ -134,6 +137,7 @@ func Load() *Config {
 		LLMModelName: getEnv("LLM_MODEL_NAME", "gpt-4"),
 
 		IngestionBaseURL:      getEnv("INGESTION_BASE_URL", "http://localhost:8081"),
+		EDCServicePort:        getEnv("EDC_SERVICE_PORT", "8091"),
 		GatewayRequestTimeout: getDuration("GATEWAY_REQUEST_TIMEOUT", 10*time.Second),
 		GatewayRateLimitRPS:   getIntEnv("GATEWAY_RATE_LIMIT_RPS", 100),
 		GatewayRateLimitBurst: getIntEnv("GATEWAY_RATE_LIMIT_BURST", 200),

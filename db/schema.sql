@@ -150,3 +150,130 @@ CREATE TABLE IF NOT EXISTS cohort_materializations (
 
 CREATE INDEX IF NOT EXISTS idx_cohort_materializations_status ON cohort_materializations(status);
 CREATE INDEX IF NOT EXISTS idx_cohort_materializations_cohort ON cohort_materializations(cohort_id);
+
+CREATE TABLE IF NOT EXISTS studies (
+    id UUID PRIMARY KEY,
+    code TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    phase TEXT,
+    therapeutic_area TEXT,
+    status TEXT NOT NULL DEFAULT 'draft',
+    sponsor TEXT,
+    protocol_summary JSONB,
+    start_date DATE,
+    end_date DATE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS study_sites (
+    id UUID PRIMARY KEY,
+    study_id UUID NOT NULL REFERENCES studies(id) ON DELETE CASCADE,
+    site_code TEXT NOT NULL,
+    name TEXT NOT NULL,
+    country TEXT,
+    principal_investigator TEXT,
+    status TEXT NOT NULL DEFAULT 'planned',
+    contact JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (study_id, site_code)
+);
+
+CREATE TABLE IF NOT EXISTS study_forms (
+    id UUID PRIMARY KEY,
+    study_id UUID NOT NULL REFERENCES studies(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL,
+    version INTEGER NOT NULL DEFAULT 1,
+    description TEXT,
+    schema JSONB NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (study_id, slug, version)
+);
+
+CREATE TABLE IF NOT EXISTS visit_templates (
+    id UUID PRIMARY KEY,
+    study_id UUID NOT NULL REFERENCES studies(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    visit_order INTEGER NOT NULL,
+    window_start_days INTEGER,
+    window_end_days INTEGER,
+    required BOOLEAN NOT NULL DEFAULT TRUE,
+    forms JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (study_id, visit_order)
+);
+
+CREATE TABLE IF NOT EXISTS subjects (
+    id UUID PRIMARY KEY,
+    study_id UUID NOT NULL REFERENCES studies(id) ON DELETE CASCADE,
+    site_id UUID REFERENCES study_sites(id) ON DELETE SET NULL,
+    subject_code TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'screening',
+    randomization_arm TEXT,
+    consented_at TIMESTAMPTZ,
+    demographics JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (study_id, subject_code)
+);
+
+CREATE TABLE IF NOT EXISTS subject_visits (
+    id UUID PRIMARY KEY,
+    subject_id UUID NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+    visit_template_id UUID NOT NULL REFERENCES visit_templates(id) ON DELETE CASCADE,
+    scheduled_date DATE,
+    actual_date DATE,
+    status TEXT NOT NULL DEFAULT 'scheduled',
+    forms JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS consent_versions (
+    id UUID PRIMARY KEY,
+    study_id UUID NOT NULL REFERENCES studies(id) ON DELETE CASCADE,
+    version TEXT NOT NULL,
+    title TEXT,
+    summary TEXT,
+    document_url TEXT,
+    effective_at TIMESTAMPTZ NOT NULL,
+    superseded_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (study_id, version)
+);
+
+CREATE TABLE IF NOT EXISTS consent_signatures (
+    id UUID PRIMARY KEY,
+    subject_id UUID NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+    consent_version_id UUID NOT NULL REFERENCES consent_versions(id) ON DELETE CASCADE,
+    signed_at TIMESTAMPTZ NOT NULL,
+    signer_name TEXT,
+    method TEXT,
+    ip_address TEXT,
+    metadata JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (subject_id, consent_version_id)
+);
+
+CREATE TABLE IF NOT EXISTS study_audit_logs (
+    id BIGSERIAL PRIMARY KEY,
+    study_id UUID REFERENCES studies(id) ON DELETE CASCADE,
+    subject_id UUID REFERENCES subjects(id) ON DELETE SET NULL,
+    actor TEXT NOT NULL,
+    role TEXT,
+    action TEXT NOT NULL,
+    entity TEXT,
+    entity_id TEXT,
+    payload JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_studies_status ON studies(status);
+CREATE INDEX IF NOT EXISTS idx_study_sites_status ON study_sites(status);
+CREATE INDEX IF NOT EXISTS idx_subjects_status ON subjects(status);
+CREATE INDEX IF NOT EXISTS idx_subject_visits_status ON subject_visits(status);
+CREATE INDEX IF NOT EXISTS idx_consent_signatures_subject ON consent_signatures(subject_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_study ON study_audit_logs(study_id, created_at);

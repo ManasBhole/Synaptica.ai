@@ -38,6 +38,7 @@ services:
     depends_on:
       - ingestion-service
       - redis
+      - edc-service
     environment:
       SERVER_HOST: 0.0.0.0
       SERVER_PORT: "8080"
@@ -185,6 +186,21 @@ services:
       - api-gateway
     ports:
       - "3000:3000"
+    networks:
+      - synaptica
+
+  edc-service:
+    image: ghcr.io/manasbhole/synaptica.ai/edc-service:latest
+    depends_on:
+      - postgres
+    environment:
+      SERVER_HOST: 0.0.0.0
+      EDC_SERVICE_PORT: "8091"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: synaptica
+      POSTGRES_PASSWORD: synaptica123
+      POSTGRES_DB: synaptica
     networks:
       - synaptica
 
