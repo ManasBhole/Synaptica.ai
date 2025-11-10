@@ -1,10 +1,12 @@
 'use client';
 
 import { useCallback, useMemo, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CheckCircleIcon, ExclamationTriangleIcon, ArrowPathIcon } from "@heroicons/react/24/solid";
 import { MetricCard } from "../../components/metric-card";
 import { useCohortExport, useCohortQuery, useCohortVerify } from "../../hooks/useCohort";
-import type { CohortQueryPayload } from "../../lib/api";
+import { useCohortMaterializations } from "../../hooks/useCohortMaterializations";
+import { materializeCohort, type CohortQueryPayload } from "../../lib/api";
 
 const defaultDSL = `select patient_id, resource_type, concept, value, timestamp
 from lakehouse
@@ -81,6 +83,14 @@ export default function CohortPage() {
   const verify = useCohortVerify();
   const query = useCohortQuery();
   const exportMutation = useCohortExport();
+  const materializations = useCohortMaterializations(25);
+  const queryClient = useQueryClient();
+  const materialize = useMutation({
+    mutationFn: materializeCohort,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cohort-materializations", 25] });
+    }
+  });
 
   const records = useMemo(() => {
     const raw = query.data?.metadata?.records;
@@ -139,6 +149,19 @@ export default function CohortPage() {
     setPage(0);
   };
 
+  const handleMaterialize = () => {
+    if (!query.data?.cohortId) {
+      return;
+    }
+    const payload = {
+      cohortId: query.data.cohortId,
+      dsl,
+      fields: columns,
+      limit
+    };
+    materialize.mutate(payload);
+  };
+
   const handleVerify = () => {
     verify.mutate(dsl);
   };
@@ -178,6 +201,14 @@ export default function CohortPage() {
   const queryTimeDisplay = formatDuration(query.data?.queryTime);
   const cohortSize = query.data?.count ?? 0;
   const uniquePatients = query.data?.patientIds.length ?? 0;
+  const jobs = materializations.data ?? [];
+  const isMaterializing = materialize.status === "pending";
+  const materializeErrorMessage =
+    materialize.status === "error"
+      ? materialize.error instanceof Error
+        ? materialize.error.message
+        : "Materialization failed"
+      : null;
 
   const patientPreview = query.data?.patientIds.slice(0, 12) ?? [];
   const sliceCount = Array.isArray(query.data?.metadata?.slices) ? (query.data?.metadata?.slices as unknown[]).length : undefined;
@@ -216,6 +247,15 @@ export default function CohortPage() {
               {query.status === "pending" ? <ArrowPathIcon className="h-5 w-5 animate-spin" /> : <CheckCircleIcon className="h-5 w-5" />}
               {query.status === "pending" ? "Running" : "Run Cohort"}
             </button>
+            <button
+              type="button"
+              onClick={handleMaterialize}
+              disabled={!query.data?.cohortId || isMaterializing}
+              className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white/80 transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isMaterializing ? <ArrowPathIcon className="h-5 w-5 animate-spin text-brand-200" /> : <CheckCircleIcon className="h-5 w-5 text-brand-200" />}
+              {isMaterializing ? "Materializing" : "Materialize Cohort"}
+            </button>
           </div>
         </div>
         {verifyState === "success" && (
@@ -226,6 +266,16 @@ export default function CohortPage() {
         {verifyState === "error" && (
           <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-rose-500/20 px-4 py-1 text-xs font-medium text-rose-200">
             <ExclamationTriangleIcon className="h-4 w-4" /> {verify.error?.message ?? "Verification failed"}
+          </div>
+        )}
+        {materialize.status === "success" && (
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-4 py-1 text-xs font-medium text-emerald-200">
+            <CheckCircleIcon className="h-4 w-4" /> Materialization job enqueued
+          </div>
+        )}
+        {materializeErrorMessage && (
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-rose-500/20 px-4 py-1 text-xs font-medium text-rose-200">
+            <ExclamationTriangleIcon className="h-4 w-4" /> {materializeErrorMessage}
           </div>
         )}
       </section>
@@ -406,6 +456,72 @@ export default function CohortPage() {
                     {query.status === "success"
                       ? "No records returned for this cohort. Adjust filters or expand the limit."
                       : "Run the cohort to preview records."}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="glass-panel px-6 py-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.32em] text-white/50">Materializations</p>
+            <h2 className="mt-2 text-xl font-semibold text-white">Cohort Feature Jobs</h2>
+            <p className="mt-1 text-xs text-white/40">Latest jobs stream cohort results into the feature store for online serving.</p>
+          </div>
+          <div className="flex items-center gap-3 text-xs text-white/60">
+            <button
+              type="button"
+              onClick={() => materializations.refetch()}
+              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 font-medium text-white/70 transition hover:border-white/20 hover:text-white"
+            >
+              <ArrowPathIcon className={`h-4 w-4 ${materializations.isFetching ? "animate-spin" : ""}`} /> Refresh
+            </button>
+          </div>
+        </div>
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full divide-y divide-white/10 text-left text-sm text-white/70">
+            <thead>
+              <tr>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Job ID</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Status</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Result Count</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Requested</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Completed</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Error</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {jobs.map((job) => (
+                <tr key={job.id} className="hover:bg-white/5">
+                  <td className="px-4 py-3 font-mono text-[13px] text-white/70">{job.id.slice(0, 12)}…</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                        job.status === "completed"
+                          ? "bg-emerald-500/15 text-emerald-200"
+                          : job.status === "failed"
+                          ? "bg-rose-500/20 text-rose-200"
+                          : "bg-brand-500/15 text-brand-200"
+                      }`}
+                    >
+                      {job.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">{job.resultCount.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-xs text-white/50">{new Date(job.createdAt).toLocaleString()}</td>
+                  <td className="px-4 py-3 text-xs text-white/50">
+                    {job.completedAt ? new Date(job.completedAt).toLocaleString() : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-rose-300">{job.errorMessage ?? ""}</td>
+                </tr>
+              ))}
+              {jobs.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-white/40">
+                    No materialization jobs yet. Run a cohort and materialize it to populate the feature store.
                   </td>
                 </tr>
               )}

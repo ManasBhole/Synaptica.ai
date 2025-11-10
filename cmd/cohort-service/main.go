@@ -7,9 +7,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/synaptica-ai/platform/pkg/analytics/cohort"
 	"github.com/synaptica-ai/platform/pkg/common/config"
@@ -46,10 +49,17 @@ func main() {
 	}
 
 	featureStore := storage.NewFeatureStore(db, redisClient, cfg.FeatureOnlinePrefix, cfg.FeatureCacheTTL)
+	if err := featureStore.AutoMigrate(); err != nil {
+		logger.Log.WithError(err).Fatal("Failed to migrate feature store tables")
+	}
 	linkageRepo := linkage.NewRepository(db)
 	templateRepo := cohort.NewTemplateRepository(db)
 	if err := templateRepo.AutoMigrate(); err != nil {
 		logger.Log.WithError(err).Fatal("Failed to migrate cohort templates table")
+	}
+	materialRepo := cohort.NewMaterializationRepository(db)
+	if err := materialRepo.AutoMigrate(); err != nil {
+		logger.Log.WithError(err).Fatal("Failed to migrate cohort materializations table")
 	}
 	app := &CohortApp{
 		service: cohort.NewService(
@@ -58,6 +68,7 @@ func main() {
 			cohort.WithFeatureStore(featureStore),
 			cohort.WithLinkageRepository(linkageRepo),
 			cohort.WithTemplateRepository(templateRepo),
+			cohort.WithMaterializer(materialRepo, featureStore, cfg.FeatureMaterializeWorkers),
 		),
 	}
 
@@ -73,6 +84,8 @@ func main() {
 	router.HandleFunc("/api/v1/cohort/query", app.handleQuery).Methods(http.MethodPost)
 	router.HandleFunc("/api/v1/cohort/verify", app.handleVerify).Methods(http.MethodPost)
 	router.HandleFunc("/api/v1/cohort/{id}", app.handleDrilldown).Methods(http.MethodPost)
+	router.HandleFunc("/api/v1/cohort/materialize", app.handleMaterialize).Methods(http.MethodPost)
+	router.HandleFunc("/api/v1/cohort/materialize", app.handleMaterializeList).Methods(http.MethodGet)
 
 	server := &http.Server{
 		Addr:    fmt.Sprintf("%s:%s", cfg.ServerHost, "8087"),
@@ -170,4 +183,55 @@ func (a *CohortApp) handleDrilldown(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
+}
+
+func (a *CohortApp) handleMaterialize(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	var req models.CohortMaterializeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(req.DSL) == "" {
+		http.Error(w, "dsl is required", http.StatusBadRequest)
+		return
+	}
+	if req.CohortID == "" {
+		req.CohortID = uuid.New().String()
+	}
+
+	ctx := r.Context()
+	job, err := a.service.Materialize(ctx, req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"job": job,
+	})
+}
+
+func (a *CohortApp) handleMaterializeList(w http.ResponseWriter, r *http.Request) {
+	tenant := r.URL.Query().Get("tenant_id")
+	limitStr := r.URL.Query().Get("limit")
+	limit := 50
+	if limitStr != "" {
+		if v, err := strconv.Atoi(limitStr); err == nil {
+			limit = v
+		}
+	}
+
+	ctx := r.Context()
+	jobs, err := a.service.ListMaterializations(ctx, tenant, limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"jobs": jobs,
+	})
 }

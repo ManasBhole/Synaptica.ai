@@ -234,6 +234,39 @@ export async function runCohortQuery(payload: CohortQueryPayload): Promise<Cohor
   return data;
 }
 
+export interface CohortMaterialization {
+  id: string;
+  cohortId: string;
+  tenantId?: string;
+  dsl: string;
+  fields?: string[];
+  status: string;
+  resultCount: number;
+  errorMessage?: string;
+  requestedBy?: string;
+  createdAt: ISODateString;
+  startedAt?: ISODateString;
+  completedAt?: ISODateString;
+}
+
+export async function materializeCohort(payload: {
+  cohortId?: string;
+  dsl: string;
+  fields?: string[];
+  limit?: number;
+  filters?: Record<string, unknown>;
+}): Promise<CohortMaterialization> {
+  const { data } = await api.post<{ job: CohortMaterialization }>("/api/v1/cohort/materialize", payload);
+  return data.job;
+}
+
+export async function listCohortMaterializations(limit = 25): Promise<CohortMaterialization[]> {
+  const { data } = await api.get<{ jobs: CohortMaterialization[] }>("/api/v1/cohort/materialize", {
+    params: { limit }
+  });
+  return data.jobs;
+}
+
 export async function verifyCohortDSL(dsl: string): Promise<{ status: string }> {
   const { data } = await api.post<{ status: string }>("/api/v1/cohort/verify", { dsl });
   return data;

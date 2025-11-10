@@ -146,6 +146,32 @@ type CohortDrilldown struct {
 	Metadata        map[string]interface{} `json:"metadata,omitempty"`
 }
 
+type CohortMaterializeRequest struct {
+	CohortID    string                 `json:"cohort_id"`
+	TenantID    string                 `json:"tenant_id,omitempty"`
+	DSL         string                 `json:"dsl"`
+	Fields      []string               `json:"fields,omitempty"`
+	Filters     map[string]interface{} `json:"filters,omitempty"`
+	Limit       int                    `json:"limit,omitempty"`
+	RequestedBy string                 `json:"requested_by,omitempty"`
+}
+
+type CohortMaterialization struct {
+	ID           uuid.UUID              `json:"id"`
+	CohortID     string                 `json:"cohort_id"`
+	TenantID     string                 `json:"tenant_id,omitempty"`
+	DSL          string                 `json:"dsl"`
+	Fields       []string               `json:"fields,omitempty"`
+	Filters      map[string]interface{} `json:"filters,omitempty"`
+	Status       string                 `json:"status"`
+	ResultCount  int                    `json:"result_count"`
+	ErrorMessage string                 `json:"error_message,omitempty"`
+	RequestedBy  string                 `json:"requested_by,omitempty"`
+	CreatedAt    time.Time              `json:"created_at"`
+	StartedAt    *time.Time             `json:"started_at,omitempty"`
+	CompletedAt  *time.Time             `json:"completed_at,omitempty"`
+}
+
 type CohortTemplate struct {
 	ID          string    `json:"id"`
 	TenantID    string    `json:"tenant_id,omitempty"`
@@ -172,21 +198,21 @@ type FeatureSet struct {
 
 // Model Training
 type TrainingJob struct {
-	ID              uuid.UUID              `json:"id"`
-	ModelType       string                 `json:"model_type"`
-	Config          map[string]interface{} `json:"config"`
-	Status          string                 `json:"status"`
-	CreatedAt       time.Time              `json:"created_at"`
-	StartedAt       *time.Time             `json:"started_at,omitempty"`
-	CompletedAt     *time.Time             `json:"completed_at,omitempty"`
-	Metrics         map[string]interface{} `json:"metrics,omitempty"`
-	ArtifactPath    string                 `json:"artifact_path,omitempty"`
-	ErrorMessage    string                 `json:"error_message,omitempty"`
-	Promoted        bool                   `json:"promoted"`
-	PromotedAt      *time.Time             `json:"promoted_at,omitempty"`
-	PromotedBy      string                 `json:"promoted_by,omitempty"`
-	PromotionNotes  string                 `json:"promotion_notes,omitempty"`
-	DeploymentTarget string                `json:"deployment_target,omitempty"`
+	ID               uuid.UUID              `json:"id"`
+	ModelType        string                 `json:"model_type"`
+	Config           map[string]interface{} `json:"config"`
+	Status           string                 `json:"status"`
+	CreatedAt        time.Time              `json:"created_at"`
+	StartedAt        *time.Time             `json:"started_at,omitempty"`
+	CompletedAt      *time.Time             `json:"completed_at,omitempty"`
+	Metrics          map[string]interface{} `json:"metrics,omitempty"`
+	ArtifactPath     string                 `json:"artifact_path,omitempty"`
+	ErrorMessage     string                 `json:"error_message,omitempty"`
+	Promoted         bool                   `json:"promoted"`
+	PromotedAt       *time.Time             `json:"promoted_at,omitempty"`
+	PromotedBy       string                 `json:"promoted_by,omitempty"`
+	PromotionNotes   string                 `json:"promotion_notes,omitempty"`
+	DeploymentTarget string                 `json:"deployment_target,omitempty"`
 }
 
 // Model Serving

@@ -16,11 +16,13 @@ import (
 )
 
 type Service struct {
-	lakehouse *storage.LakehouseWriter
-	olap      *storage.OLAPWriter
-	features  *storage.FeatureStore
-	linkage   *linkage.Repository
-	templates *TemplateRepository
+	lakehouse        *storage.LakehouseWriter
+	olap             *storage.OLAPWriter
+	features         *storage.FeatureStore
+	linkage          *linkage.Repository
+	templates        *TemplateRepository
+	materializer     *Materializer
+	materializations *MaterializationRepository
 }
 
 func NewService(lakehouse *storage.LakehouseWriter, olap *storage.OLAPWriter, opts ...Option) *Service {
@@ -97,6 +99,20 @@ func (s *Service) Export(ctx context.Context, query models.CohortQuery, w io.Wri
 		return err
 	}
 	return nil
+}
+
+func (s *Service) Materialize(ctx context.Context, req models.CohortMaterializeRequest) (models.CohortMaterialization, error) {
+	if s.materializer == nil {
+		return models.CohortMaterialization{}, fmt.Errorf("materialization not configured")
+	}
+	return s.materializer.Enqueue(ctx, req)
+}
+
+func (s *Service) ListMaterializations(ctx context.Context, tenantID string, limit int) ([]models.CohortMaterialization, error) {
+	if s.materializer == nil {
+		return []models.CohortMaterialization{}, nil
+	}
+	return s.materializer.List(ctx, tenantID, limit)
 }
 
 func (s *Service) Drilldown(ctx context.Context, req models.CohortDrilldownRequest) (models.CohortDrilldown, error) {
@@ -276,5 +292,18 @@ func WithLinkageRepository(repo *linkage.Repository) Option {
 func WithTemplateRepository(repo *TemplateRepository) Option {
 	return func(s *Service) {
 		s.templates = repo
+	}
+}
+
+func WithMaterializer(repo *MaterializationRepository, featureStore *storage.FeatureStore, workers int) Option {
+	return func(s *Service) {
+		if repo == nil || featureStore == nil {
+			return
+		}
+		if s.features == nil {
+			s.features = featureStore
+		}
+		s.materializations = repo
+		s.materializer = NewMaterializer(repo, s, featureStore, workers)
 	}
 }

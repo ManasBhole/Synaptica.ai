@@ -8,8 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,6 +34,8 @@ func (h *CohortHandler) Register(r *mux.Router) {
 	r.HandleFunc("/cohort/verify", h.handleVerify).Methods(http.MethodPost)
 	r.HandleFunc("/cohort/export", h.handleExport).Methods(http.MethodPost)
 	r.HandleFunc("/cohort/templates", h.handleTemplates).Methods(http.MethodGet)
+	r.HandleFunc("/cohort/materialize", h.handleMaterialize).Methods(http.MethodPost)
+	r.HandleFunc("/cohort/materialize", h.handleMaterializeList).Methods(http.MethodGet)
 	r.HandleFunc("/cohort/{id}", h.handleDrilldown).Methods(http.MethodPost)
 }
 
@@ -254,4 +256,53 @@ func (h *CohortHandler) handleTemplates(w http.ResponseWriter, r *http.Request) 
 	}
 
 	writeJSON(w, map[string]interface{}{"items": templates})
+}
+
+func (h *CohortHandler) handleMaterialize(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	var payload models.CohortMaterializeRequest
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "invalid materialize request", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(payload.DSL) == "" {
+		http.Error(w, "dsl is required", http.StatusBadRequest)
+		return
+	}
+	if payload.CohortID == "" {
+		payload.CohortID = generateCohortID()
+	}
+	payload.TenantID = resolveTenantID(r.Context())
+	if payload.RequestedBy == "" {
+		payload.RequestedBy = payload.TenantID
+	}
+
+	job, err := h.service.Materialize(r.Context(), payload)
+	if err != nil {
+		logger.Log.WithError(err).Error("failed to enqueue cohort materialization")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
+	writeJSON(w, map[string]interface{}{"job": job})
+}
+
+func (h *CohortHandler) handleMaterializeList(w http.ResponseWriter, r *http.Request) {
+	tenant := resolveTenantID(r.Context())
+	limit := 50
+	if str := r.URL.Query().Get("limit"); str != "" {
+		if v, err := strconv.Atoi(str); err == nil && v > 0 {
+			limit = v
+		}
+	}
+
+	jobs, err := h.service.ListMaterializations(r.Context(), tenant, limit)
+	if err != nil {
+		logger.Log.WithError(err).Error("failed to list cohort materializations")
+		http.Error(w, "failed to list materializations", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, map[string]interface{}{"jobs": jobs})
 }

@@ -51,7 +51,6 @@ type Config struct {
 	LLMModelName string
 
 	// Feature Store
-	FeatureStoreCacheTTL time.Duration
 
 	// Gateway specific
 	IngestionBaseURL      string
@@ -82,12 +81,13 @@ type Config struct {
 	LinkageThreshold         float64
 
 	// Storage / Feature Store
-	LakehouseTable         string
-	OlapTable              string
-	FeatureOfflineTable    string
-	FeatureOnlinePrefix    string
-	FeatureMaterializeCron string
-	FeatureCacheTTL        time.Duration
+	LakehouseTable            string
+	OlapTable                 string
+	FeatureOfflineTable       string
+	FeatureOnlinePrefix       string
+	FeatureMaterializeCron    string
+	FeatureMaterializeWorkers int
+	FeatureCacheTTL           time.Duration
 
 	// Training / ML
 	TrainingArtifactDir     string
@@ -133,8 +133,6 @@ func Load() *Config {
 		LLMBaseURL:   getEnv("LLM_BASE_URL", "https://api.openai.com/v1"),
 		LLMModelName: getEnv("LLM_MODEL_NAME", "gpt-4"),
 
-		FeatureStoreCacheTTL: getDuration("FEATURE_STORE_CACHE_TTL", 5*time.Minute),
-
 		IngestionBaseURL:      getEnv("INGESTION_BASE_URL", "http://localhost:8081"),
 		GatewayRequestTimeout: getDuration("GATEWAY_REQUEST_TIMEOUT", 10*time.Second),
 		GatewayRateLimitRPS:   getIntEnv("GATEWAY_RATE_LIMIT_RPS", 100),
@@ -158,12 +156,13 @@ func Load() *Config {
 		LinkageDeterministicKeys: getStringSliceEnv("LINKAGE_DETERMINISTIC_KEYS", []string{"patient_id", "token_patient_id"}),
 		LinkageThreshold:         getFloatEnv("LINKAGE_THRESHOLD", 0.85),
 
-		LakehouseTable:         getEnv("LAKEHOUSE_TABLE", "lakehouse_facts"),
-		OlapTable:              getEnv("OLAP_TABLE", "olap_rollups"),
-		FeatureOfflineTable:    getEnv("FEATURE_OFFLINE_TABLE", "feature_offline_store"),
-		FeatureOnlinePrefix:    getEnv("FEATURE_ONLINE_PREFIX", "feature:"),
-		FeatureMaterializeCron: getEnv("FEATURE_MATERIALIZE_CRON", "@every 1m"),
-		FeatureCacheTTL:        getDuration("FEATURE_CACHE_TTL", 5*time.Minute),
+		LakehouseTable:            getEnv("LAKEHOUSE_TABLE", "lakehouse_facts"),
+		OlapTable:                 getEnv("OLAP_TABLE", "olap_rollups"),
+		FeatureOfflineTable:       getEnv("FEATURE_OFFLINE_TABLE", "feature_offline_store"),
+		FeatureOnlinePrefix:       getEnv("FEATURE_ONLINE_PREFIX", "feature:"),
+		FeatureMaterializeCron:    getEnv("FEATURE_MATERIALIZE_CRON", "@every 1m"),
+		FeatureMaterializeWorkers: getIntEnv("FEATURE_MATERIALIZE_WORKERS", 2),
+		FeatureCacheTTL:           getDuration("FEATURE_CACHE_TTL", 5*time.Minute),
 
 		TrainingArtifactDir:     getEnv("TRAINING_ARTIFACT_DIR", "artifacts/training"),
 		TrainingMaxWorkers:      getIntEnv("TRAINING_MAX_WORKERS", 2),

@@ -131,3 +131,22 @@ CREATE TABLE IF NOT EXISTS cohort_templates (
 );
 
 CREATE INDEX IF NOT EXISTS idx_cohort_templates_tenant ON cohort_templates(tenant_id);
+
+CREATE TABLE IF NOT EXISTS cohort_materializations (
+    id UUID PRIMARY KEY,
+    cohort_id TEXT NOT NULL,
+    tenant_id TEXT,
+    dsl TEXT NOT NULL,
+    fields JSONB,
+    filters JSONB,
+    status TEXT NOT NULL,
+    result_count INTEGER DEFAULT 0,
+    error_message TEXT,
+    requested_by TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_cohort_materializations_status ON cohort_materializations(status);
+CREATE INDEX IF NOT EXISTS idx_cohort_materializations_cohort ON cohort_materializations(cohort_id);
