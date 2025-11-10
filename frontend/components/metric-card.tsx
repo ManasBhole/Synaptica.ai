@@ -12,7 +12,7 @@ interface MetricCardProps {
 const gradientByAccent: Record<string, string> = {
   accent: "from-accent-500 to-accent-400",
   brand: "from-brand-500 to-brand-400",
-  sunset: "from-amber-400 to-pink-500"
+  sunset: "from-amber-300 to-orange-500"
 };
 
 export const MetricCard = ({ label, value, change, icon, accent = "accent", footer }: MetricCardProps) => {

@@ -6,26 +6,26 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          50: "#f5f3ff",
-          100: "#ede9fe",
-          200: "#ddd6fe",
-          400: "#a855f7",
-          500: "#9333ea",
-          600: "#7e22ce"
+          50: "#e0f2fe",
+          100: "#bae6fd",
+          200: "#7dd3fc",
+          400: "#38bdf8",
+          500: "#0ea5e9",
+          600: "#0284c7"
         },
         accent: {
-          400: "#fb7185",
-          500: "#f43f5e",
-          600: "#e11d48"
+          400: "#facc15",
+          500: "#f59e0b",
+          600: "#d97706"
         },
         surface: {
-          DEFAULT: "#111827",
-          raised: "#1f2937"
+          DEFAULT: "#07111f",
+          raised: "#122033"
         }
       },
       boxShadow: {
-        floating: "0 15px 45px -20px rgba(147, 51, 234, 0.45)",
-        glow: "0 10px 30px rgba(244, 63, 94, 0.35)"
+        floating: "0 18px 45px -22px rgba(14, 165, 233, 0.45)",
+        glow: "0 12px 32px rgba(245, 158, 11, 0.35)"
       }
     }
   },

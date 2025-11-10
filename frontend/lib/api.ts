@@ -148,6 +148,34 @@ export async function fetchDLPStats(): Promise<DLPStatsResponse> {
   return data;
 }
 
+export interface PredictionMetricsSummary {
+  total: number;
+  windowSeconds: number;
+  p50LatencyMs: number;
+  p95LatencyMs: number;
+  averageLatencyMs: number;
+  averageConfidence: number;
+}
+
+export interface PredictionEvent {
+  id: string;
+  patientId: string;
+  modelName: string;
+  latencyMs: number;
+  confidence: number;
+  createdAt: ISODateString;
+}
+
+export interface PredictionMetricsResponse {
+  summary: PredictionMetricsSummary;
+  events: PredictionEvent[];
+}
+
+export async function fetchPredictionMetrics(): Promise<PredictionMetricsResponse> {
+  const { data } = await api.get<PredictionMetricsResponse>("/api/v1/metrics/predictions");
+  return data;
+}
+
 export interface CohortQueryPayload {
   id?: string;
   dsl: string;

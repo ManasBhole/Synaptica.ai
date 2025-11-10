@@ -504,8 +504,8 @@ func (h *MetricsHandler) handlePredictionLatency(w http.ResponseWriter, r *http.
 	if err := h.db.WithContext(r.Context()).Raw(`
 		SELECT
 			date_trunc('minute', created_at) AS bucket,
-			AVG(EXTRACT(EPOCH FROM created_at - timestamp) * 1000) AS latency_ms
-		FROM lakehouse_facts
+			AVG(latency_ms) AS latency_ms
+		FROM prediction_logs
 		WHERE created_at > NOW() - INTERVAL '2 hour'
 		GROUP BY bucket
 		ORDER BY bucket ASC

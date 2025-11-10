@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"strconv"
 	"syscall"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/synaptica-ai/platform/pkg/common/database"
 	"github.com/synaptica-ai/platform/pkg/common/logger"
 	"github.com/synaptica-ai/platform/pkg/common/models"
+	"github.com/synaptica-ai/platform/pkg/serving"
 	"github.com/synaptica-ai/platform/pkg/serving/predictor"
 	"github.com/synaptica-ai/platform/pkg/storage"
 )
@@ -23,6 +25,7 @@ import (
 type ServingService struct {
 	featureStore *storage.FeatureStore
 	predictor    *predictor.Predictor
+	logs         *serving.Repository
 	// Model serving backend (Triton/Vertex/TF Serving)
 	modelBackend interface{}
 }
@@ -42,17 +45,24 @@ func main() {
 		logger.Log.WithError(err).Fatal("Failed to migrate feature store tables")
 	}
 
+	logsRepo := serving.NewRepository(db)
+	if err := logsRepo.AutoMigrate(); err != nil {
+		logger.Log.WithError(err).Fatal("Failed to migrate prediction log table")
+	}
+
 	predictorEngine := predictor.NewPredictor(cfg.TrainingArtifactDir)
 
 	service := &ServingService{
 		featureStore: featureStore,
 		predictor:    predictorEngine,
+		logs:         logsRepo,
 	}
 
 	router := mux.NewRouter()
 	router.HandleFunc("/health", healthCheck).Methods("GET")
 	router.HandleFunc("/api/v1/predict", service.handlePredict).Methods("POST")
 	router.HandleFunc("/api/v1/models", service.handleListModels).Methods("GET")
+	router.HandleFunc("/api/v1/metrics/predictions", service.handlePredictionMetrics).Methods("GET")
 
 	server := &http.Server{
 		Addr:    fmt.Sprintf("%s:%s", cfg.ServerHost, "8089"),
@@ -99,6 +109,10 @@ func (s *ServingService) handlePredict(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
+	}
+
+	if req.ModelName == "" {
+		req.ModelName = "risk-score"
 	}
 
 	// Get features from cache (p95 < 10ms)
@@ -151,6 +165,10 @@ func (s *ServingService) handlePredict(w http.ResponseWriter, r *http.Request) {
 		"patient_id": req.PatientID,
 		"latency_ms": latency.Milliseconds(),
 	}).Info("Prediction completed")
+
+	if err := s.logs.RecordPrediction(ctx, req, features, resp); err != nil {
+		logger.Log.WithError(err).Warn("failed to record prediction log")
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
@@ -205,4 +223,120 @@ func toFloat(value interface{}) (float64, error) {
 	default:
 		return 0, fmt.Errorf("unsupported type %T", value)
 	}
+}
+
+type predictionSummary struct {
+	Total          int     `json:"total"`
+	WindowSeconds  int64   `json:"windowSeconds"`
+	P50LatencyMs   float64 `json:"p50LatencyMs"`
+	P95LatencyMs   float64 `json:"p95LatencyMs"`
+	AverageLatency float64 `json:"averageLatencyMs"`
+	AverageConfidence float64 `json:"averageConfidence"`
+}
+
+type predictionEvent struct {
+	ID         string    `json:"id"`
+	PatientID  string    `json:"patientId"`
+	ModelName  string    `json:"modelName"`
+	LatencyMs  float64   `json:"latencyMs"`
+	Confidence float64   `json:"confidence"`
+	CreatedAt  time.Time `json:"createdAt"`
+}
+
+type predictionMetricsResponse struct {
+	Summary predictionSummary `json:"summary"`
+	Events  []predictionEvent `json:"events"`
+}
+
+func (s *ServingService) handlePredictionMetrics(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logs, err := s.logs.Recent(ctx, 200)
+	if err != nil {
+		logger.Log.WithError(err).Error("failed to load prediction logs")
+		http.Error(w, "failed to load prediction metrics", http.StatusInternalServerError)
+		return
+	}
+
+	response := buildPredictionMetrics(logs)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+func buildPredictionMetrics(logs []serving.PredictionLog) predictionMetricsResponse {
+	if len(logs) == 0 {
+		return predictionMetricsResponse{
+			Summary: predictionSummary{WindowSeconds: 0},
+			Events:  []predictionEvent{},
+		}
+	}
+
+	latencies := make([]float64, len(logs))
+	confidences := 0.0
+	newest := logs[0].CreatedAt
+	oldest := logs[len(logs)-1].CreatedAt
+	events := make([]predictionEvent, 0, min(len(logs), 25))
+
+	for i, log := range logs {
+		latencies[i] = log.LatencyMs
+		confidences += log.Confidence
+		if len(events) < cap(events) {
+			events = append(events, predictionEvent{
+				ID:         log.ID.String(),
+				PatientID:  log.PatientID,
+				ModelName:  log.ModelName,
+				LatencyMs:  log.LatencyMs,
+				Confidence: log.Confidence,
+				CreatedAt:  log.CreatedAt,
+			})
+		}
+	}
+
+	sort.Float64s(latencies)
+	p50 := percentile(latencies, 0.5)
+	p95 := percentile(latencies, 0.95)
+	avgLatency := average(latencies)
+	avgConfidence := confidences / float64(len(logs))
+
+	summary := predictionSummary{
+		Total:           len(logs),
+		WindowSeconds:   int64(newest.Sub(oldest).Seconds()),
+		P50LatencyMs:    p50,
+		P95LatencyMs:    p95,
+		AverageLatency:  avgLatency,
+		AverageConfidence: avgConfidence,
+	}
+
+	return predictionMetricsResponse{Summary: summary, Events: events}
+}
+
+func percentile(values []float64, quantile float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	rank := quantile * float64(len(values)-1)
+	lower := int(rank)
+	upper := lower + 1
+	if upper >= len(values) {
+		return values[lower]
+	}
+	frac := rank - float64(lower)
+	return values[lower] + (values[upper]-values[lower])*frac
+}
+
+func average(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	total := 0.0
+	for _, v := range values {
+		total += v
+	}
+	return total / float64(len(values))
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

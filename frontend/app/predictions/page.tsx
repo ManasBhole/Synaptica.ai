@@ -3,12 +3,19 @@
 import { useState } from "react";
 import { api } from "../../lib/api";
 import { MetricCard } from "../../components/metric-card";
-import { Sparkline } from "../../components/sparkline";
-import { usePredictionLatency } from "../../hooks/useSystemMetrics";
+import { usePredictionAnalytics } from "../../hooks/usePredictionAnalytics";
 
 export default function PredictionsPage() {
-  const { data: latency } = usePredictionLatency();
-  const latencySeries = latency ?? [];
+  const { data: analytics } = usePredictionAnalytics();
+  const summary = analytics?.summary ?? {
+    total: 0,
+    windowSeconds: 0,
+    p50LatencyMs: 0,
+    p95LatencyMs: 0,
+    averageLatencyMs: 0,
+    averageConfidence: 0
+  };
+  const events = analytics?.events ?? [];
   const [patientId, setPatientId] = useState("patient-001");
   const [value, setValue] = useState(124);
   const [score, setScore] = useState<number | null>(null);
@@ -79,11 +86,18 @@ export default function PredictionsPage() {
         </div>
       </div>
       <aside className="space-y-6">
-        <MetricCard label="Latency p95" value={`${Math.round(latencySeries.at(-1)?.latencyMs ?? 140)} ms`} accent="brand" />
+        <MetricCard label="Latency p95" value={`${summary.p95LatencyMs.toFixed(0)} ms`} accent="brand" change={`p50 ${summary.p50LatencyMs.toFixed(0)} ms`} />
         <MetricCard
-          label="Throughput"
-          value="12.4k / min"
-          footer={<Sparkline points={latencySeries.map((item) => item.latencyMs)} />}
+          label="Requests analysed"
+          value={summary.total.toLocaleString()}
+          change={`Window ${(summary.windowSeconds / 60).toFixed(0)} min`}
+          accent="accent"
+        />
+        <MetricCard
+          label="Avg Confidence"
+          value={`${(summary.averageConfidence * 100).toFixed(1)}%`}
+          change={`Latency ${summary.averageLatencyMs.toFixed(0)} ms`}
+          accent="sunset"
         />
         <div className="glass-panel px-6 py-6 text-sm text-white/60">
           <p className="font-semibold text-white">Serving engine</p>
@@ -93,6 +107,47 @@ export default function PredictionsPage() {
           </p>
         </div>
       </aside>
+
+      <div className="lg:col-span-3 glass-panel px-8 py-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-white">Prediction Activity</h3>
+            <p className="text-sm text-white/60">Recent inference calls captured from the serving API.</p>
+          </div>
+          <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/60">{summary.total} events</span>
+        </div>
+        <div className="mt-6 overflow-x-auto">
+          <table className="min-w-full divide-y divide-white/10 text-left text-sm text-white/70">
+            <thead>
+              <tr>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Patient</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Model</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Latency</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Confidence</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Timestamp</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {events.map((event) => (
+                <tr key={event.id} className="hover:bg-white/5">
+                  <td className="px-4 py-3 font-medium text-white">{event.patientId}</td>
+                  <td className="px-4 py-3 text-white/60">{event.modelName}</td>
+                  <td className="px-4 py-3 text-white/60">{event.latencyMs.toFixed(0)} ms</td>
+                  <td className="px-4 py-3 text-white/60">{(event.confidence * 100).toFixed(1)}%</td>
+                  <td className="px-4 py-3 text-white/60">{new Date(event.createdAt).toLocaleTimeString()}</td>
+                </tr>
+              ))}
+              {events.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-12 text-center text-sm text-white/40">
+                    No prediction activity yet. Submit an inference above to populate the stream.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
