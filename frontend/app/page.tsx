@@ -55,25 +55,25 @@ const OverviewContent = () => {
         <div className="glass-panel space-y-4 px-6 py-6 lg:col-span-2">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.32em] text-white/50">Pipeline Status</p>
-              <h2 className="mt-2 text-xl font-semibold text-white">Flow Health</h2>
+              <p className="text-[11px] uppercase tracking-[0.32em] text-neutral-400">Pipeline Status</p>
+              <h2 className="mt-2 text-xl font-semibold text-neutral-900">Flow Health</h2>
             </div>
-            <span className="rounded-full bg-brand-500/15 px-3 py-1 text-xs text-brand-200">SLO • 99.3%</span>
+            <span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-medium text-brand-700">SLO • 99.3%</span>
           </div>
-          <div className="divide-y divide-white/5">
+          <div className="divide-y divide-neutral-200">
             {pipelines.map((stage) => (
               <div key={stage.id} className="flex items-center justify-between py-4">
                 <div>
-                  <p className="text-sm font-semibold text-white/80">{stage.stage}</p>
-                  <p className="text-xs text-white/50">{stage.details}</p>
+                  <p className="text-sm font-semibold text-neutral-900">{stage.stage}</p>
+                  <p className="text-xs text-neutral-500">{stage.details}</p>
                 </div>
                 <span
                   className={`rounded-full px-3 py-1 text-xs font-medium ${
                     stage.status === "healthy"
-                      ? "bg-brand-500/15 text-brand-200"
+                      ? "bg-brand-100 text-brand-700"
                       : stage.status === "degraded"
-                        ? "bg-amber-500/15 text-amber-200"
-                        : "bg-rose-500/15 text-rose-200"
+                        ? "bg-amber-100 text-amber-700"
+                        : "bg-rose-100 text-rose-700"
                   }`}
                 >
                   {stage.status.toUpperCase()}
@@ -101,7 +101,7 @@ const OverviewContent = () => {
 
 export default function OverviewPage() {
   return (
-    <Suspense fallback={<div className="text-white/60">Loading analytics…</div>}>
+    <Suspense fallback={<div className="text-neutral-500">Loading analytics…</div>}>
       <OverviewContent />
     </Suspense>
   );

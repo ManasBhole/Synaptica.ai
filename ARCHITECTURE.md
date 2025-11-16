@@ -18,7 +18,7 @@ This document describes the comprehensive microservices architecture for the Syn
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         EDGE / INGRESS                                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ API Gateway (OIDC, mTLS, RLS)                                              │
+│ API Gateway (JWT auth, mTLS, RLS)                                          │
 │         │                                                                   │
 │         ▼                                                                   │
 │ Ingestion Service (FHIR, device JSON, file drops)                           │
@@ -81,7 +81,7 @@ This document describes the comprehensive microservices architecture for the Syn
 ### 1. API Gateway (`cmd/api-gateway`)
 - **Port**: 8080
 - **Features**:
-  - OIDC authentication
+  - First-party JWT authentication & session bootstrap
   - mTLS support
   - Row-Level Security (RLS)
   - Request routing and forwarding
@@ -89,7 +89,20 @@ This document describes the comprehensive microservices architecture for the Syn
   - `GET /health` - Health check
   - `POST /api/v1/ingest` - Forward to ingestion service
 
-### 2. Ingestion Service (`cmd/ingestion-service`)
+### 2. Identity & Access (`pkg/identity`)
+- **Port**: n/a (library used by gateway)
+- **Features**:
+  - Organization + user repositories
+  - Bcrypt password hashing
+  - Bootstrap workflows for first admin
+  - JWT issuance & validation helpers
+- **Endpoints** (exposed via gateway):
+  - `POST /api/v1/auth/bootstrap` – initialize first org/admin
+  - `POST /api/v1/auth/login` – authenticate user
+  - `POST /api/v1/auth/register` – invite/create additional users
+  - `GET /api/v1/auth/me` – fetch authenticated profile
+
+### 3. Ingestion Service (`cmd/ingestion-service`)
 - **Port**: 8081
 - **Features**:
   - Handles FHIR, HL7, ABDM formats
@@ -99,7 +112,7 @@ This document describes the comprehensive microservices architecture for the Syn
   - `POST /api/v1/ingest` - Accept upstream data
   - `GET /api/v1/ingest/status/{id}` - Check ingestion status
 
-### 3. DLP Service (`cmd/dlp-service`)
+### 4. DLP Service (`cmd/dlp-service`)
 - **Port**: 8082
 - **Features**:
   - PHI detection using regex patterns
@@ -109,7 +122,7 @@ This document describes the comprehensive microservices architecture for the Syn
   - `POST /api/v1/detect` - Detect PHI in data
 - **Kafka**: Consumes `upstream-events`, publishes `sanitized-events`
 
-### 4. De-ID Service (`cmd/deid-service`)
+### 5. De-ID Service (`cmd/deid-service`)
 - **Port**: 8083
 - **Features**:
   - Tokenization of PHI
@@ -119,7 +132,7 @@ This document describes the comprehensive microservices architecture for the Syn
   - `POST /api/v1/deid` - De-identify data
 - **Kafka**: Consumes `sanitized-events`, publishes `deidentified-events`
 
-### 5. Normalizer Service (`cmd/normalizer-service`)
+### 6. Normalizer Service (`cmd/normalizer-service`)
 - **Port**: 8084
 - **Features**:
   - Converts to canonical FHIR format
@@ -128,7 +141,7 @@ This document describes the comprehensive microservices architecture for the Syn
   - `POST /api/v1/normalize` - Normalize data
 - **Kafka**: Consumes `deidentified-events`, publishes `normalized-events`
 
-### 6. Linkage Service (`cmd/linkage-service`)
+### 7. Linkage Service (`cmd/linkage-service`)
 - **Port**: 8085
 - **Features**:
   - Deterministic record matching
@@ -138,7 +151,7 @@ This document describes the comprehensive microservices architecture for the Syn
   - `POST /api/v1/link` - Link records
 - **Kafka**: Consumes `normalized-events`, publishes to multiple downstream topics
 
-### 7. LLM Service (`cmd/llm-service`)
+### 8. LLM Service (`cmd/llm-service`)
 - **Port**: 8086
 - **Features**:
   - Natural language to cohort query conversion
@@ -149,7 +162,7 @@ This document describes the comprehensive microservices architecture for the Syn
   - `POST /api/v1/notes-nlp` - Process clinical notes
   - `POST /api/v1/code-map` - Map medical codes
 
-### 8. Cohort Service (`cmd/cohort-service`)
+### 9. Cohort Service (`cmd/cohort-service`)
 - **Port**: 8087
 - **Features**:
   - Cohort query execution
@@ -160,7 +173,7 @@ This document describes the comprehensive microservices architecture for the Syn
   - `POST /api/v1/cohort/verify` - Verify DSL
   - `GET /api/v1/cohort/{id}` - Get cohort by ID
 
-### 9. Training Service (`cmd/training-service`)
+### 10. Training Service (`cmd/training-service`)
 - **Port**: 8088
 - **Features**:
   - Model training orchestration
@@ -170,7 +183,7 @@ This document describes the comprehensive microservices architecture for the Syn
   - `POST /api/v1/training/jobs` - Create training job
   - `GET /api/v1/training/jobs/{id}` - Get job status
 
-### 10. Serving Service (`cmd/serving-service`)
+### 11. Serving Service (`cmd/serving-service`)
 - **Port**: 8089
 - **Features**:
   - Model serving (Triton/Vertex/TF Serving)
@@ -180,7 +193,7 @@ This document describes the comprehensive microservices architecture for the Syn
   - `POST /api/v1/predict` - Get predictions
   - `GET /api/v1/models` - List available models
 
-### 11. Clean Room Service (`cmd/cleanroom-service`)
+### 12. Clean Room Service (`cmd/cleanroom-service`)
 - **Port**: 8090
 - **Features**:
   - Differential privacy (DP) queries

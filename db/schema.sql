@@ -1,3 +1,28 @@
+CREATE TABLE IF NOT EXISTS organizations (
+    id UUID PRIMARY KEY,
+    name TEXT NOT NULL,
+    slug TEXT UNIQUE NOT NULL,
+    metadata JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY,
+    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    email TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    avatar_url TEXT,
+    metadata JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_org ON users(organization_id);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+
 CREATE TABLE IF NOT EXISTS ingestion_requests (
     id UUID PRIMARY KEY,
     source TEXT NOT NULL,

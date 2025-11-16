@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -14,11 +15,13 @@ import (
 	"github.com/synaptica-ai/platform/pkg/common/config"
 	"github.com/synaptica-ai/platform/pkg/common/database"
 	"github.com/synaptica-ai/platform/pkg/common/logger"
+	"github.com/synaptica-ai/platform/pkg/common/models"
 	"github.com/synaptica-ai/platform/pkg/edc"
-	"github.com/synaptica-ai/platform/pkg/gateway/auth"
+	gatewayauth "github.com/synaptica-ai/platform/pkg/gateway/auth"
 	"github.com/synaptica-ai/platform/pkg/gateway/httpclient"
 	"github.com/synaptica-ai/platform/pkg/gateway/middleware"
 	"github.com/synaptica-ai/platform/pkg/gateway/routes"
+	"github.com/synaptica-ai/platform/pkg/identity"
 	"github.com/synaptica-ai/platform/pkg/linkage"
 	"github.com/synaptica-ai/platform/pkg/observability/metrics"
 	"github.com/synaptica-ai/platform/pkg/storage"
@@ -34,10 +37,27 @@ func main() {
 		logger.Log.WithError(err).Fatal("Failed to connect to postgres")
 	}
 
-	// Initialize OIDC authenticator
-	oidcAuth, err := auth.NewOIDCAuthenticator(cfg.OIDCIssuer, cfg.OIDCClientID, cfg.OIDCClientSecret)
+	jwtManager, err := gatewayauth.NewJWTManager(cfg.AuthTokenSecret, cfg.AuthTokenIssuer, cfg.AuthTokenAudience, cfg.AuthTokenTTL)
 	if err != nil {
-		logger.Log.WithError(err).Warn("OIDC authentication not configured, running without auth")
+		logger.Log.WithError(err).Fatal("Failed to configure JWT manager")
+	}
+
+	identityRepo := identity.NewRepository(db)
+	if err := identityRepo.AutoMigrate(); err != nil {
+		logger.Log.WithError(err).Warn("Failed to migrate identity tables")
+	}
+	identityService := identity.NewService(identityRepo)
+	if cfg.AuthBootstrapOrgName != "" && cfg.AuthBootstrapOrgSlug != "" && cfg.AuthBootstrapAdminEmail != "" && cfg.AuthBootstrapAdminPassword != "" {
+		_, _, bootstrapErr := identityService.Bootstrap(context.Background(), models.BootstrapRequest{
+			OrganizationName: cfg.AuthBootstrapOrgName,
+			OrganizationSlug: cfg.AuthBootstrapOrgSlug,
+			AdminEmail:       cfg.AuthBootstrapAdminEmail,
+			AdminName:        cfg.AuthBootstrapAdminName,
+			AdminPassword:    cfg.AuthBootstrapAdminPassword,
+		})
+		if bootstrapErr != nil && !errors.Is(bootstrapErr, identity.ErrBootstrapNotAllowed) {
+			logger.Log.WithError(bootstrapErr).Warn("automatic bootstrap failed")
+		}
 	}
 
 	// Shared HTTP client for downstream calls
@@ -49,9 +69,7 @@ func main() {
 	// Middleware
 	router.Use(middleware.Logging)
 	router.Use(middleware.Recovery)
-	if oidcAuth != nil {
-		router.Use(middleware.Authenticate(oidcAuth))
-	}
+	router.Use(middleware.AttachUserIfPresent(jwtManager))
 	router.Use(middleware.RLS) // Row-Level Security
 	router.Use(middleware.CORS)
 	router.Use(middleware.RateLimit(cfg.GatewayRateLimitRPS, cfg.GatewayRateLimitBurst))
@@ -75,6 +93,11 @@ func main() {
 
 	// API routes
 	apiRouter := router.PathPrefix("/api/v1").Subrouter()
+
+	authRouter := apiRouter.PathPrefix("/auth").Subrouter()
+	authHandler := routes.NewAuthHandler(identityService, jwtManager)
+	authHandler.Register(authRouter)
+
 	ingestionProxy := &routes.IngestionProxy{Client: client, Cfg: cfg}
 	routes.RegisterIngestionRoutes(apiRouter, ingestionProxy)
 

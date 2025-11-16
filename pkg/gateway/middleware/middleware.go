@@ -3,12 +3,13 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/synaptica-ai/platform/pkg/common/logger"
-	"github.com/synaptica-ai/platform/pkg/gateway/auth"
+	gatewayauth "github.com/synaptica-ai/platform/pkg/gateway/auth"
 )
 
 type contextKey string
@@ -51,7 +52,7 @@ func Recovery(next http.Handler) http.Handler {
 	})
 }
 
-func Authenticate(oidcAuth *auth.OIDCAuthenticator) func(http.Handler) http.Handler {
+func Authenticate(tokenManager *gatewayauth.JWTManager) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := r.Header.Get("Authorization")
@@ -61,11 +62,11 @@ func Authenticate(oidcAuth *auth.OIDCAuthenticator) func(http.Handler) http.Hand
 			}
 
 			// Extract Bearer token
-			if len(token) > 7 && token[:7] == "Bearer " {
+			if len(token) > 7 && strings.EqualFold(token[:7], "Bearer ") {
 				token = token[7:]
 			}
 
-			claims, err := oidcAuth.ValidateToken(r.Context(), token)
+			claims, err := tokenManager.ValidateToken(r.Context(), token)
 			if err != nil {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
@@ -78,20 +79,53 @@ func Authenticate(oidcAuth *auth.OIDCAuthenticator) func(http.Handler) http.Hand
 	}
 }
 
+func AttachUserIfPresent(tokenManager *gatewayauth.JWTManager) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			token := r.Header.Get("Authorization")
+			if token == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if len(token) > 7 && strings.EqualFold(token[:7], "Bearer ") {
+				token = token[7:]
+			}
+			claims, err := tokenManager.ValidateToken(r.Context(), token)
+			if err != nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			ctx := context.WithValue(r.Context(), UserContextKey, claims)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
 // Row-Level Security middleware
 func RLS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Extract user from context
-		user := r.Context().Value(UserContextKey)
-		if user == nil {
+		val := r.Context().Value(UserContextKey)
+		if val == nil {
 			// For public endpoints, allow
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		// Add RLS context - in production, this would set tenant/org filters
+		var userID interface{}
+		switch c := val.(type) {
+		case *gatewayauth.Claims:
+			userID = c.UserID.String()
+		case gatewayauth.Claims:
+			userID = c.UserID.String()
+		case map[string]interface{}:
+			userID = c["sub"]
+		default:
+			userID = nil
+		}
+
 		ctx := context.WithValue(r.Context(), "rls_filters", map[string]interface{}{
-			"user_id": user.(map[string]interface{})["sub"],
+			"user_id": userID,
 		})
 
 		next.ServeHTTP(w, r.WithContext(ctx))

@@ -221,9 +221,9 @@ export default function CohortPage() {
       <section className="glass-panel px-6 py-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.32em] text-white/50">Cohort Intelligence</p>
-            <h1 className="mt-2 text-2xl font-semibold text-white">Design, validate, and materialize cohorts in seconds</h1>
-            <p className="mt-3 max-w-2xl text-sm text-white/60">
+            <p className="text-[11px] uppercase tracking-[0.32em] text-neutral-400">Cohort Intelligence</p>
+            <h1 className="mt-2 text-2xl font-semibold text-neutral-900">Design, validate, and materialize cohorts in seconds</h1>
+            <p className="mt-3 max-w-2xl text-sm text-neutral-500">
               Use Synaptica&apos;s DSL to slice the longitudinal lakehouse, verify privacy-safe filters, and export curated patient populations for AI training
               or payer reporting.
             </p>
@@ -233,16 +233,16 @@ export default function CohortPage() {
               type="button"
               onClick={handleVerify}
               disabled={isVerifying}
-              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-medium text-neutral-700 transition hover:border-brand-300 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isVerifying ? <ArrowPathIcon className="h-4 w-4 animate-spin" /> : <CheckCircleIcon className="h-4 w-4 text-brand-300" />}
+              {isVerifying ? <ArrowPathIcon className="h-4 w-4 animate-spin text-brand-500" /> : <CheckCircleIcon className="h-4 w-4 text-brand-500" />}
               {isVerifying ? "Verifying" : "Verify DSL"}
             </button>
             <button
               type="button"
               onClick={handleRunQuery}
               disabled={query.status === "pending"}
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-brand-500 via-accent-500 to-accent-400 px-5 py-2 text-sm font-semibold text-white shadow-glow transition hover:shadow-[0_12px_35px_rgba(244,63,94,0.35)] disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-brand-500 via-brand-400 to-accent-400 px-5 py-2 text-sm font-semibold text-white shadow-glow transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {query.status === "pending" ? <ArrowPathIcon className="h-5 w-5 animate-spin" /> : <CheckCircleIcon className="h-5 w-5" />}
               {query.status === "pending" ? "Running" : "Run Cohort"}
@@ -251,31 +251,31 @@ export default function CohortPage() {
               type="button"
               onClick={handleMaterialize}
               disabled={!query.data?.cohortId || isMaterializing}
-              className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white/80 transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:border-brand-300 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isMaterializing ? <ArrowPathIcon className="h-5 w-5 animate-spin text-brand-200" /> : <CheckCircleIcon className="h-5 w-5 text-brand-200" />}
+              {isMaterializing ? <ArrowPathIcon className="h-5 w-5 animate-spin text-brand-500" /> : <CheckCircleIcon className="h-5 w-5 text-brand-500" />}
               {isMaterializing ? "Materializing" : "Materialize Cohort"}
             </button>
           </div>
         </div>
         {verifyState === "success" && (
-          <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand-500/15 px-4 py-1 text-xs font-medium text-brand-200">
-            <CheckCircleIcon className="h-4 w-4" /> Cohort DSL verified
+          <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand-100 px-4 py-1 text-xs font-medium text-brand-700">
+            <CheckCircleIcon className="h-4 w-4 text-brand-500" /> Cohort DSL verified
           </div>
         )}
         {verifyState === "error" && (
-          <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-rose-500/20 px-4 py-1 text-xs font-medium text-rose-200">
-            <ExclamationTriangleIcon className="h-4 w-4" /> {verify.error?.message ?? "Verification failed"}
+          <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-rose-100 px-4 py-1 text-xs font-medium text-rose-700">
+            <ExclamationTriangleIcon className="h-4 w-4 text-rose-500" /> {verify.error?.message ?? "Verification failed"}
           </div>
         )}
         {materialize.status === "success" && (
-          <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-4 py-1 text-xs font-medium text-emerald-200">
-            <CheckCircleIcon className="h-4 w-4" /> Materialization job enqueued
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-100 px-4 py-1 text-xs font-medium text-emerald-700">
+            <CheckCircleIcon className="h-4 w-4 text-emerald-500" /> Materialization job enqueued
           </div>
         )}
         {materializeErrorMessage && (
-          <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-rose-500/20 px-4 py-1 text-xs font-medium text-rose-200">
-            <ExclamationTriangleIcon className="h-4 w-4" /> {materializeErrorMessage}
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-rose-100 px-4 py-1 text-xs font-medium text-rose-700">
+            <ExclamationTriangleIcon className="h-4 w-4 text-rose-500" /> {materializeErrorMessage}
           </div>
         )}
       </section>
@@ -284,10 +284,12 @@ export default function CohortPage() {
         <div className="glass-panel px-6 py-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-white">Cohort DSL</h2>
-              <p className="text-xs text-white/50">Tune select fields, predicates, and limit guards. All queries auto-enforce RLS and tokenization policies.</p>
+              <h2 className="text-lg font-semibold text-neutral-900">Cohort DSL</h2>
+              <p className="text-xs text-neutral-500">
+                Tune select fields, predicates, and limit guards. All queries auto-enforce RLS and tokenization policies.
+              </p>
             </div>
-            <label className="flex items-center gap-2 text-xs text-white/60">
+            <label className="flex items-center gap-2 text-xs text-neutral-500">
               Limit
               <input
                 type="number"
@@ -295,7 +297,7 @@ export default function CohortPage() {
                 max={5000}
                 value={limit}
                 onChange={(event) => setLimit(Number.parseInt(event.target.value, 10) || 0)}
-                className="w-24 rounded-xl border border-white/10 bg-white/5 px-3 py-1 text-right text-sm text-white focus:border-brand-400 focus:outline-none"
+                className="w-24 rounded-xl border border-neutral-200 bg-white px-3 py-1 text-right text-sm text-neutral-900 focus:border-brand-400 focus:outline-none"
               />
             </label>
           </div>
@@ -303,9 +305,9 @@ export default function CohortPage() {
             value={dsl}
             onChange={(event) => setDsl(event.target.value)}
             spellCheck={false}
-            className="mt-4 h-64 w-full resize-none rounded-2xl border border-white/10 bg-black/40 px-4 py-4 font-mono text-sm text-white/80 shadow-inner focus:border-brand-400 focus:outline-none"
+            className="mt-4 h-64 w-full resize-none rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-4 font-mono text-sm text-neutral-800 shadow-inner focus:border-brand-400 focus:outline-none"
           />
-          <div className="mt-4 flex flex-wrap gap-3 text-xs text-white/60">
+          <div className="mt-4 flex flex-wrap gap-3 text-xs text-neutral-500">
             {availableFields.map((field) => {
               const active = fields.includes(field.key);
               return (
@@ -314,7 +316,7 @@ export default function CohortPage() {
                   key={field.key}
                   onClick={() => handleToggleField(field.key)}
                   className={`rounded-full border px-3 py-1 transition ${
-                    active ? "border-brand-400/60 bg-brand-500/20 text-white" : "border-white/10 bg-white/5 hover:border-white/20"
+                    active ? "border-brand-300 bg-brand-50 text-brand-700" : "border-neutral-200 bg-white hover:border-brand-200 hover:text-brand-600"
                   }`}
                 >
                   {field.label}
@@ -323,17 +325,17 @@ export default function CohortPage() {
             })}
           </div>
           <div className="mt-6">
-            <p className="text-[11px] uppercase tracking-[0.32em] text-white/40">Templates</p>
+            <p className="text-[11px] uppercase tracking-[0.32em] text-neutral-400">Templates</p>
             <div className="mt-3 grid gap-3 md:grid-cols-3">
               {templates.map((template) => (
                 <button
                   type="button"
                   key={template.label}
                   onClick={() => setDsl(template.dsl)}
-                  className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left text-xs text-white/70 transition hover:border-brand-400/60 hover:bg-brand-500/10"
+                  className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-left text-xs text-neutral-600 transition hover:border-brand-300 hover:bg-brand-50"
                 >
-                  <p className="text-sm font-semibold text-white">{template.label}</p>
-                  <p className="mt-2 line-clamp-4 whitespace-pre-line text-[11px] text-white/50">{template.dsl}</p>
+                  <p className="text-sm font-semibold text-neutral-900">{template.label}</p>
+                  <p className="mt-2 line-clamp-4 whitespace-pre-line text-[11px] text-neutral-500">{template.dsl}</p>
                 </button>
               ))}
             </div>
@@ -341,12 +343,12 @@ export default function CohortPage() {
         </div>
         <div className="space-y-4">
           <div className="glass-panel px-6 py-6">
-            <label className="text-xs uppercase tracking-[0.32em] text-white/40">Description</label>
+            <label className="text-xs uppercase tracking-[0.32em] text-neutral-400">Description</label>
             <textarea
               value={description}
               onChange={(event) => setDescription(event.target.value)}
               placeholder="Investor-ready narrative for this cohort run"
-              className="mt-2 h-28 w-full resize-none rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70 focus:border-brand-400 focus:outline-none"
+              className="mt-2 h-28 w-full resize-none rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-600 focus:border-brand-400 focus:outline-none"
             />
           </div>
           <div className="grid gap-4 md:grid-cols-2">
@@ -370,33 +372,33 @@ export default function CohortPage() {
       <section className="glass-panel px-6 py-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.32em] text-white/50">Record Sample</p>
-            <h2 className="mt-2 text-xl font-semibold text-white">Materialized rows (top 200)</h2>
-            <p className="mt-1 text-xs text-white/40">
+            <p className="text-[11px] uppercase tracking-[0.32em] text-neutral-400">Record Sample</p>
+            <h2 className="mt-2 text-xl font-semibold text-neutral-900">Materialized rows (top 200)</h2>
+            <p className="mt-1 text-xs text-neutral-500">
               {cacheHit ? "Cached" : "Fresh"} • Showing {showingStart ? `${showingStart}–${showingEnd}` : "0"} of {totalRecords}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3 text-xs text-white/60">
+          <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-500">
             <label className="flex items-center gap-2">
               Rows/page
               <select
                 value={pageSize}
                 onChange={(event) => handlePageSizeChange(Number(event.target.value))}
-                className="rounded-xl border border-white/10 bg-white/5 px-3 py-1 text-white focus:border-brand-400 focus:outline-none"
+                className="rounded-xl border border-neutral-200 bg-white px-3 py-1 text-neutral-700 focus:border-brand-300 focus:outline-none"
               >
                 {[10, 25, 50, 100].map((size) => (
-                  <option key={size} value={size} className="bg-surface-raised text-slate-900">
+                  <option key={size} value={size} className="bg-white text-neutral-900">
                     {size}
                   </option>
                 ))}
               </select>
             </label>
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-white/70">
+            <div className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-3 py-1 text-neutral-600">
               <button
                 type="button"
                 onClick={handlePrevPage}
                 disabled={safePage === 0}
-                className="rounded-full px-2 text-white/70 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-full px-2 text-neutral-500 transition hover:text-neutral-900 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Prev
               </button>
@@ -407,7 +409,7 @@ export default function CohortPage() {
                 type="button"
                 onClick={handleNextPage}
                 disabled={safePage >= pageCount - 1 || totalRecords === 0}
-                className="rounded-full px-2 text-white/70 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-full px-2 text-neutral-500 transition hover:text-neutral-900 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Next
               </button>
@@ -416,34 +418,34 @@ export default function CohortPage() {
               type="button"
               onClick={handleExport}
               disabled={exportDisabled}
-              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1 font-medium text-white/70 transition hover:border-brand-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-1 font-medium text-neutral-600 transition hover:border-brand-300 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {exportMutation.status === "pending" ? "Exporting…" : "Export CSV"}
             </button>
             {(query.status === "pending" || exportMutation.status === "pending") && (
-              <ArrowPathIcon className="h-5 w-5 animate-spin text-brand-300" />
+              <ArrowPathIcon className="h-5 w-5 animate-spin text-brand-500" />
             )}
           </div>
         </div>
         <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full divide-y divide-white/10 text-left text-sm text-white/70">
+          <table className="min-w-full divide-y divide-neutral-200 text-left text-sm text-neutral-700">
             <thead>
               <tr>
                 {columns.map((column) => (
-                  <th key={column} className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">
+                  <th key={column} className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-neutral-400">
                     {column}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/10">
+            <tbody className="divide-y divide-neutral-100">
               {pagedRecords.map((row, rowIndex) => {
                 const candidateId = row["patient_id"];
                 const rowKey = typeof candidateId === "string" ? `${candidateId}-${pageStart + rowIndex}` : `row-${pageStart + rowIndex}`;
                 return (
-                  <tr key={rowKey} className="hover:bg-white/5">
+                  <tr key={rowKey} className="hover:bg-brand-50/60">
                     {columns.map((column) => (
-                      <td key={column} className="px-4 py-3 font-mono text-[13px] text-white/70">
+                      <td key={column} className="px-4 py-3 font-mono text-[13px] text-neutral-700">
                         {formatValue(row[column])}
                       </td>
                     ))}
@@ -452,7 +454,7 @@ export default function CohortPage() {
               })}
               {totalRecords === 0 && (
                 <tr>
-                  <td colSpan={Math.max(columns.length, 1)} className="px-4 py-12 text-center text-sm text-white/40">
+                  <td colSpan={Math.max(columns.length, 1)} className="px-4 py-12 text-center text-sm text-neutral-400">
                     {query.status === "success"
                       ? "No records returned for this cohort. Adjust filters or expand the limit."
                       : "Run the cohort to preview records."}
@@ -467,60 +469,60 @@ export default function CohortPage() {
       <section className="glass-panel px-6 py-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.32em] text-white/50">Materializations</p>
-            <h2 className="mt-2 text-xl font-semibold text-white">Cohort Feature Jobs</h2>
-            <p className="mt-1 text-xs text-white/40">Latest jobs stream cohort results into the feature store for online serving.</p>
+            <p className="text-[11px] uppercase tracking-[0.32em] text-neutral-400">Materializations</p>
+            <h2 className="mt-2 text-xl font-semibold text-neutral-900">Cohort Feature Jobs</h2>
+            <p className="mt-1 text-xs text-neutral-500">Latest jobs stream cohort results into the feature store for online serving.</p>
           </div>
-          <div className="flex items-center gap-3 text-xs text-white/60">
+          <div className="flex items-center gap-3 text-xs text-neutral-500">
             <button
               type="button"
               onClick={() => materializations.refetch()}
-              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 font-medium text-white/70 transition hover:border-white/20 hover:text-white"
+              className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-2 font-medium text-neutral-600 transition hover:border-brand-300 hover:text-brand-600"
             >
               <ArrowPathIcon className={`h-4 w-4 ${materializations.isFetching ? "animate-spin" : ""}`} /> Refresh
             </button>
           </div>
         </div>
         <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full divide-y divide-white/10 text-left text-sm text-white/70">
+          <table className="min-w-full divide-y divide-neutral-200 text-left text-sm text-neutral-700">
             <thead>
               <tr>
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Job ID</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Status</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Result Count</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Requested</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Completed</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white/50">Error</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-neutral-400">Job ID</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-neutral-400">Status</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-neutral-400">Result Count</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-neutral-400">Requested</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-neutral-400">Completed</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-neutral-400">Error</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/10">
+            <tbody className="divide-y divide-neutral-100">
               {jobs.map((job) => (
-                <tr key={job.id} className="hover:bg-white/5">
-                  <td className="px-4 py-3 font-mono text-[13px] text-white/70">{job.id.slice(0, 12)}…</td>
+                <tr key={job.id} className="hover:bg-brand-50/60">
+                  <td className="px-4 py-3 font-mono text-[13px] text-neutral-700">{job.id.slice(0, 12)}…</td>
                   <td className="px-4 py-3">
                     <span
                       className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
                         job.status === "completed"
-                          ? "bg-emerald-500/15 text-emerald-200"
+                          ? "bg-emerald-100 text-emerald-700"
                           : job.status === "failed"
-                          ? "bg-rose-500/20 text-rose-200"
-                          : "bg-brand-500/15 text-brand-200"
+                          ? "bg-rose-100 text-rose-700"
+                          : "bg-brand-100 text-brand-700"
                       }`}
                     >
                       {job.status}
                     </span>
                   </td>
                   <td className="px-4 py-3">{job.resultCount.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-xs text-white/50">{new Date(job.createdAt).toLocaleString()}</td>
-                  <td className="px-4 py-3 text-xs text-white/50">
+                  <td className="px-4 py-3 text-xs text-neutral-500">{new Date(job.createdAt).toLocaleString()}</td>
+                  <td className="px-4 py-3 text-xs text-neutral-500">
                     {job.completedAt ? new Date(job.completedAt).toLocaleString() : "—"}
                   </td>
-                  <td className="px-4 py-3 text-xs text-rose-300">{job.errorMessage ?? ""}</td>
+                  <td className="px-4 py-3 text-xs text-rose-500">{job.errorMessage ?? ""}</td>
                 </tr>
               ))}
               {jobs.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-white/40">
+                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-neutral-400">
                     No materialization jobs yet. Run a cohort and materialize it to populate the feature store.
                   </td>
                 </tr>

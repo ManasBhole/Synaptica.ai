@@ -40,10 +40,16 @@ type Config struct {
 	ClickHousePassword string
 	ClickHouseDB       string
 
-	// OIDC
-	OIDCIssuer       string
-	OIDCClientID     string
-	OIDCClientSecret string
+	// Auth
+	AuthTokenSecret            string
+	AuthTokenIssuer            string
+	AuthTokenAudience          string
+	AuthTokenTTL               time.Duration
+	AuthBootstrapOrgName       string
+	AuthBootstrapOrgSlug       string
+	AuthBootstrapAdminEmail    string
+	AuthBootstrapAdminName     string
+	AuthBootstrapAdminPassword string
 
 	// LLM
 	LLMAPIKey    string
@@ -128,9 +134,15 @@ func Load() *Config {
 		ClickHousePassword: getEnv("CLICKHOUSE_PASSWORD", ""),
 		ClickHouseDB:       getEnv("CLICKHOUSE_DB", "synaptica"),
 
-		OIDCIssuer:       getEnv("OIDC_ISSUER", ""),
-		OIDCClientID:     getEnv("OIDC_CLIENT_ID", ""),
-		OIDCClientSecret: getEnv("OIDC_CLIENT_SECRET", ""),
+		AuthTokenSecret:            getEnv("AUTH_TOKEN_SECRET", "synaptica-change-me-please-very-secret"),
+		AuthTokenIssuer:            getEnv("AUTH_TOKEN_ISSUER", "synaptica"),
+		AuthTokenAudience:          getEnv("AUTH_TOKEN_AUDIENCE", "synaptica-app"),
+		AuthTokenTTL:               getDuration("AUTH_TOKEN_TTL", 24*time.Hour),
+		AuthBootstrapOrgName:       getEnv("AUTH_BOOTSTRAP_ORG_NAME", ""),
+		AuthBootstrapOrgSlug:       getEnv("AUTH_BOOTSTRAP_ORG_SLUG", ""),
+		AuthBootstrapAdminEmail:    getEnv("AUTH_BOOTSTRAP_ADMIN_EMAIL", ""),
+		AuthBootstrapAdminName:     getEnv("AUTH_BOOTSTRAP_ADMIN_NAME", ""),
+		AuthBootstrapAdminPassword: getEnv("AUTH_BOOTSTRAP_ADMIN_PASSWORD", ""),
 
 		LLMAPIKey:    getEnv("LLM_API_KEY", ""),
 		LLMBaseURL:   getEnv("LLM_BASE_URL", "https://api.openai.com/v1"),

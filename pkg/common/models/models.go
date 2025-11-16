@@ -430,3 +430,56 @@ type ConsentSignatureRequest struct {
 	IPAddress        string                 `json:"ip_address,omitempty"`
 	Metadata         map[string]interface{} `json:"metadata,omitempty"`
 }
+
+// Identity & Auth
+type Organization struct {
+	ID        uuid.UUID              `json:"id"`
+	Name      string                 `json:"name"`
+	Slug      string                 `json:"slug"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt time.Time              `json:"created_at"`
+	UpdatedAt time.Time              `json:"updated_at"`
+}
+
+type User struct {
+	ID             uuid.UUID              `json:"id"`
+	OrganizationID uuid.UUID              `json:"organization_id"`
+	Email          string                 `json:"email"`
+	Name           string                 `json:"name"`
+	Role           string                 `json:"role"`
+	AvatarURL      string                 `json:"avatar_url,omitempty"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt      time.Time              `json:"created_at"`
+	UpdatedAt      time.Time              `json:"updated_at"`
+}
+
+type BootstrapRequest struct {
+	OrganizationName string                 `json:"organization_name"`
+	OrganizationSlug string                 `json:"organization_slug"`
+	AdminEmail       string                 `json:"admin_email"`
+	AdminName        string                 `json:"admin_name,omitempty"`
+	AdminPassword    string                 `json:"admin_password"`
+	AdminAvatarURL   string                 `json:"admin_avatar_url,omitempty"`
+	AdminMetadata    map[string]interface{} `json:"admin_metadata,omitempty"`
+}
+
+type RegisterUserRequest struct {
+	OrganizationID uuid.UUID              `json:"organization_id"`
+	Email          string                 `json:"email"`
+	Name           string                 `json:"name"`
+	Role           string                 `json:"role,omitempty"`
+	Password       string                 `json:"password"`
+	AvatarURL      string                 `json:"avatar_url,omitempty"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+}
+
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type AuthResponse struct {
+	Token string       `json:"token"`
+	User  User         `json:"user"`
+	Org   Organization `json:"organization,omitempty"`
+}

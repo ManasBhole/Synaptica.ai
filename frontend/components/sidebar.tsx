@@ -26,14 +26,14 @@ export const Sidebar = () => {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden w-72 flex-col border-r border-white/5 bg-surface-raised/70 backdrop-blur-2xl lg:flex">
-      <div className="flex items-center gap-3 px-8 pb-6 pt-8">
-        <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-accent-500 font-semibold text-white shadow-glow">
+    <aside className="hidden w-72 flex-col border-r border-neutral-200 bg-white/95 backdrop-blur lg:flex">
+      <div className="flex items-center gap-3 px-7 pb-6 pt-8">
+        <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-400 font-semibold text-white shadow-glow">
           Σ
         </div>
         <div>
-          <p className="text-[11px] uppercase tracking-[0.4em] text-white/50">Synaptica</p>
-          <p className="text-lg font-semibold text-white">Control Center</p>
+          <p className="text-[11px] uppercase tracking-[0.4em] text-neutral-400">Synaptica</p>
+          <p className="text-lg font-semibold text-neutral-900">Insight Labs</p>
         </div>
       </div>
       <nav className="flex-1 space-y-1 px-4">
@@ -43,21 +43,21 @@ export const Sidebar = () => {
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition shadow-sm
+              className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition
                 ${
                   active
-                    ? "bg-gradient-to-r from-brand-500/20 via-brand-500/10 to-transparent text-white"
-                    : "text-white/60 hover:bg-white/10 hover:text-white"
+                    ? "bg-brand-50 text-brand-600 shadow-inner"
+                    : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
                 }`}
             >
-              <Icon className="h-5 w-5" />
+              <Icon className={`h-5 w-5 ${active ? "text-brand-500" : ""}`} />
               <span>{label}</span>
             </Link>
           );
         })}
       </nav>
-      <div className="px-6 pb-8 pt-6 text-xs text-white/50">
-        <p className="font-semibold text-white/70">Live Environments</p>
+      <div className="px-7 pb-8 pt-6 text-xs text-neutral-400">
+        <p className="font-semibold text-neutral-600">Live Environments</p>
         <p>• Production · us-east-1</p>
         <p>• Sandbox · eu-west-2</p>
       </div>
